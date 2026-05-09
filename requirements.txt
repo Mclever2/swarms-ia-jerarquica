@@ -1,0 +1,15 @@
+# Sistema de Mentoría Académica con Swarms + RAG
+swarms>=7.0.0
+streamlit>=1.35.0
+pydantic>=2.0.0
+python-dotenv>=1.0.0
+pdfplumber>=0.11.0
+chromadb>=0.5.3
+sentence-transformers>=2.7.0
+langchain-chroma>=0.1.4
+langchain-community>=0.2.16
+langchain-text-splitters>=0.2.0
+openai>=1.0.0
+tiktoken>=0.7.0
+plotly>=5.22.0
+pandas>=2.2.0

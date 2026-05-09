@@ -1,0 +1,12 @@
+[server]
+fileWatcherType = "none"
+headless = false
+
+[browser]
+gatherUsageStats = false
+
+[logger]
+level = "error"
+
+[runner]
+fastReruns = true
