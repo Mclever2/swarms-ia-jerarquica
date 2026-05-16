@@ -17,21 +17,35 @@ _PDFPLUMBER_WARNINGS = [
     "Cannot set stroke color",
 ]
 
+# Detecta líneas de índice/TOC: "Título del capítulo ......... 12"
+_RE_TOC_LINEA = re.compile(r'\.{4,}\s*\d{1,4}\s*$')
+_UMBRAL_PAGINA_TOC = 0.28  # si ≥28 % de líneas son TOC → omitir página
+
+
+def _es_pagina_indice(texto: str) -> bool:
+    lineas = [l for l in texto.split('\n') if l.strip()]
+    if not lineas:
+        return False
+    matches = sum(1 for l in lineas if _RE_TOC_LINEA.search(l.strip()))
+    return matches / len(lineas) >= _UMBRAL_PAGINA_TOC
+
 
 def extraer_texto_pdf(pdf_bytes: bytes) -> str:
     """
     Extrae el texto completo de un PDF dado como bytes.
+    Las páginas identificadas como índice/TOC se omiten automáticamente.
 
     Args:
         pdf_bytes: Contenido del archivo PDF como bytes.
 
     Returns:
-        Texto limpio, una página por párrafo, con páginas vacías omitidas.
+        Texto limpio, una página por párrafo, con páginas vacías e índices omitidos.
 
     Raises:
         Exception: Si pdfplumber no puede abrir el archivo.
     """
     paginas = []
+    paginas_toc = 0
     try:
         # Suprimir warnings de espacios de color no estándar en el PDF
         with warnings.catch_warnings():
@@ -39,16 +53,22 @@ def extraer_texto_pdf(pdf_bytes: bytes) -> str:
             with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
                 for i, pagina in enumerate(pdf.pages):
                     texto = pagina.extract_text()
-                    if texto and texto.strip():
-                        paginas.append(texto.strip())
-                        logger.debug(f"  Pág. {i + 1}: {len(texto)} chars")
+                    if not texto or not texto.strip():
+                        continue
+                    if _es_pagina_indice(texto.strip()):
+                        paginas_toc += 1
+                        logger.debug(f"  Pág. {i + 1}: índice/TOC omitida")
+                        continue
+                    paginas.append(texto.strip())
+                    logger.debug(f"  Pág. {i + 1}: {len(texto)} chars")
     except Exception as exc:
         logger.error(f"Error extrayendo texto del PDF: {exc}")
         raise
 
     resultado = "\n\n".join(paginas)
     logger.info(
-        f"PDF extraído: {len(paginas)} páginas con texto, "
+        f"PDF extraído: {len(paginas)} páginas de contenido, "
+        f"{paginas_toc} de índice/TOC omitidas, "
         f"{len(resultado):,} caracteres totales"
     )
     return resultado

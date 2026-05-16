@@ -6,6 +6,7 @@ Responsabilidad única: indexar la tesis y recuperar contexto por sección.
 """
 
 import logging
+import re
 
 import chromadb
 from langchain_chroma import Chroma
@@ -19,6 +20,16 @@ logger = logging.getLogger(__name__)
 CHUNK_SIZE    = 600
 CHUNK_OVERLAP = 80
 K_RESULTADOS  = 4
+
+# Detecta chunks que son principalmente índice/TOC: "Capítulo 3 ......... 45"
+_RE_LINEA_INDICE = re.compile(r'\.{4,}\s*\d{1,4}\s*$')
+
+def _es_chunk_indice(texto: str) -> bool:
+    lineas = [l for l in texto.split('\n') if l.strip()]
+    if not lineas:
+        return False
+    matches = sum(1 for l in lineas if _RE_LINEA_INDICE.search(l.strip()))
+    return matches / len(lineas) >= 0.35
 
 
 def construir_vector_store(
@@ -50,7 +61,12 @@ def construir_vector_store(
         [texto],
         metadatas=[{"source": collection_name, "tipo": "proyecto_tesis"}],
     )
-    logger.info(f"Tesis dividida en {len(documentos)} fragmentos")
+    antes = len(documentos)
+    documentos = [d for d in documentos if not _es_chunk_indice(d.page_content)]
+    logger.info(
+        f"Tesis dividida: {antes} fragmentos → {len(documentos)} útiles "
+        f"({antes - len(documentos)} chunks de índice/TOC filtrados)"
+    )
 
     # EphemeralClient = solo en RAM, no escribe en disco
     cliente = chromadb.EphemeralClient()
@@ -136,7 +152,12 @@ def build_tesis_store(
         separators=["\n\n", "\n", ". ", "   ", " ", ""],
     )
     documentos = splitter.create_documents(textos, metadatas=metadatas)
-    logger.info(f"Tesis dividida en {len(documentos)} fragmentos (con metadata de sección)")
+    antes = len(documentos)
+    documentos = [d for d in documentos if not _es_chunk_indice(d.page_content)]
+    logger.info(
+        f"Tesis dividida: {antes} fragmentos → {len(documentos)} útiles "
+        f"({antes - len(documentos)} chunks de índice/TOC filtrados)"
+    )
 
     cliente = chromadb.EphemeralClient()
     store = Chroma(

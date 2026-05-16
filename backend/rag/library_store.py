@@ -7,6 +7,7 @@ Responsabilidad única: gestionar los libros de referencia teórica.
 
 import os
 import logging
+import re
 from typing import List
 
 import chromadb
@@ -19,10 +20,20 @@ from .extractor import extraer_texto_pdf
 
 logger = logging.getLogger(__name__)
 
-_COLLECTION_NAME = "biblioteca_metodologia"
+_COLLECTION_NAME = "biblioteca_metodologia_e5"  # sufijo _e5: evita mezcla con vectores del modelo anterior
 _CHUNK_LIBRO     = 800
 _OVERLAP_LIBRO   = 100
 _K_LIBROS        = 3
+
+# Detecta chunks que son principalmente índice/TOC de libros
+_RE_LINEA_INDICE = re.compile(r'\.{4,}\s*\d{1,4}\s*$')
+
+def _es_chunk_indice(texto: str) -> bool:
+    lineas = [l for l in texto.split('\n') if l.strip()]
+    if not lineas:
+        return False
+    matches = sum(1 for l in lineas if _RE_LINEA_INDICE.search(l.strip()))
+    return matches / len(lineas) >= 0.35
 
 
 # ── Carga / creación ──────────────────────────────────────────────────────────
@@ -72,8 +83,13 @@ def agregar_libro(
         [texto],
         metadatas=[{"fuente": nombre_libro, "tipo": "libro_metodologia"}],
     )
+    antes = len(docs)
+    docs = [d for d in docs if not _es_chunk_indice(d.page_content)]
+    logger.info(
+        f"Libro '{nombre_libro}': {antes} fragmentos → {len(docs)} útiles "
+        f"({antes - len(docs)} chunks de índice/TOC filtrados)"
+    )
     vs_libros.add_documents(docs)
-    logger.info(f"Libro '{nombre_libro}' indexado: {len(docs)} fragmentos")
     return len(docs)
 
 

@@ -41,6 +41,7 @@ def redactar(
     instrucciones_director: str,
     contexto_rag: str,
     historial: str = "",
+    contexto_teorico: str = "",
 ) -> tuple[str, str]:
     """
     Produce texto mejorado según instrucciones del Director.
@@ -49,6 +50,7 @@ def redactar(
     task = (
         f"INSTRUCCIONES DEL DIRECTOR:\n{instrucciones_director}\n\n"
         f"CONTEXTO DEL DOCUMENTO (RAG):\n{contexto_rag}\n\n"
+        + (f"REFERENCIA TEÓRICA (biblioteca metodológica):\n{contexto_teorico}\n\n" if contexto_teorico else "")
         + (f"HISTORIAL DE CORRECCIONES:\n{historial}\n\n" if historial else "")
         + "Produce el TEXTO MEJORADO y el ARGUMENTO según tu formato de respuesta."
     )

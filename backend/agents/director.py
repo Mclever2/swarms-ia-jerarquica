@@ -99,6 +99,8 @@ class DirectorOrchestrator:
         contexto_rag: str,
         contexto_cruzado: str,
         progress_cb: Callable | None = None,
+        rubrica_dinamica: dict | None = None,
+        contexto_teorico: str = "",
     ) -> dict[str, Any]:
         """
         Inicia la orquestación jerárquica para una sección del proyecto de tesis.
@@ -120,12 +122,16 @@ class DirectorOrchestrator:
 
         # State compartido: las herramientas depositan sus resultados aquí
         state: dict = {
-            "reporte": None,
-            "texto": None,
-            "obs_metod": None,
-            "iteraciones_auditor": 0,
-            "iteraciones_metodologico": 0,
-            "iteraciones_redactor": 0,
+            "reporte":                 None,
+            "texto":                   None,
+            "obs_metod":               None,
+            "resultado_consenso":      "",
+            "resultado_disenso":       "",
+            "iteraciones_auditor":     0,
+            "iteraciones_metodologico":0,
+            "iteraciones_redactor":    0,
+            "iteraciones_consenso":    0,
+            "iteraciones_disenso":     0,
         }
 
         # Crear herramientas con el contexto de esta sesión
@@ -138,6 +144,8 @@ class DirectorOrchestrator:
             redactor_agent=self._redactor,
             state=state,
             progress_cb=progress_cb,
+            rubrica_dinamica=rubrica_dinamica,
+            contexto_teorico=contexto_teorico,
         )
 
         # Construir el Director con sus herramientas para esta sesión
@@ -161,7 +169,8 @@ class DirectorOrchestrator:
 
         logger.info(
             f"[Director] Iniciando jerarquía | sección='{seccion_key}' | "
-            f"rag={len(contexto_rag)}c | cruzado={len(contexto_cruzado)}c"
+            f"rag={len(contexto_rag)}c | cruzado={len(contexto_cruzado)}c | "
+            f"teorico={len(contexto_teorico)}c"
         )
 
         with use_groq_key(_API_KEY):
@@ -187,6 +196,8 @@ class DirectorOrchestrator:
             "texto_mejorado":     state.get("texto") or "",
             "reporte_auditor":    reporte,
             "obs_metodologica":   state.get("obs_metod") or "",
+            "resultado_consenso": state.get("resultado_consenso") or "",
+            "resultado_disenso":  state.get("resultado_disenso") or "",
             "veredicto_director": veredicto,
             "nota_vigesimal":     nota,
             "aprobado":           reporte.aprobado if reporte else False,

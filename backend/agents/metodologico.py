@@ -40,6 +40,7 @@ def analizar_coherencia(
     seccion_key: str,
     contexto_rag: str,
     contexto_cruzado: str,
+    contexto_teorico: str = "",
 ) -> str:
     """
     Convoca al Metodólogo para analizar la coherencia científica.
@@ -49,7 +50,8 @@ def analizar_coherencia(
         f"Analiza el rigor científico y la coherencia cruzada de la sección '{seccion_key}'.\n\n"
         f"CONTEXTO PRINCIPAL:\n{contexto_rag}\n\n"
         f"CONTEXTO CRUZADO (otras secciones relacionadas):\n{contexto_cruzado}\n\n"
-        "Identifica inconsistencias entre secciones según las dependencias cruzadas de la rúbrica UPAO. "
+        + (f"REFERENCIA TEÓRICA (biblioteca metodológica):\n{contexto_teorico}\n\n" if contexto_teorico else "")
+        + "Identifica inconsistencias entre secciones según las dependencias cruzadas de la rúbrica UPAO. "
         "Sé específico y concreto. Máximo 400 palabras."
     )
 

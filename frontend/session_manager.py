@@ -13,10 +13,15 @@ _DEFAULTS: dict = {
     "tesis_store":         None,       # ChromaDB ephemeral de la tesis
     "sections":            {},         # Dict[seccion_key, texto]
     "seccion_activa":      None,       # seccion_key seleccionada
+    "seccion_preview":     None,       # seccion_key seleccionada provisionalmente (antes de confirmar)
     "resultado":           None,       # Dict retornado por DirectorOrchestrator.run()
     "texto_editado":       "",         # texto que el mentor puede modificar en HITL
     "iteracion_hitl":      0,          # cuántas veces el mentor rechazó
     "historial_sesion":    [],         # lista de resultados anteriores
+    "rubrica_dinamica":    None,       # dict de rubric_parser (None = usa UPAO)
+    "rubrica_hash":        None,       # hash del PDF de rúbrica (detectar re-subida)
+    "rubrica_nombre":      None,       # nombre del archivo de rúbrica
+    "ctx_rag_actual":      "",         # contexto RAG de la última evaluación (para métricas)
 }
 
 

@@ -61,19 +61,33 @@ def evaluar_seccion(
     seccion_key: str,
     contexto_rag: str,
     contexto_cruzado: str = "",
+    rubrica_dinamica: dict | None = None,
 ) -> ReporteAuditor:
     """
     Convoca al Auditor con el contexto RAG de la sección.
+    Si rubrica_dinamica está presente, usa sus ítems en lugar de la UPAO hardcodeada.
     Retorna un ReporteAuditor Pydantic validado.
     """
-    items = items_de_seccion(seccion_key)
-    items_str = "\n".join(
-        f"- Ítem {it['n']:02d}: {it['desc']}" for it in items
+    if rubrica_dinamica:
+        from backend.rag.rubric_parser import rubrica_a_texto_prompt
+        items_str = rubrica_a_texto_prompt(rubrica_dinamica)
+        puntaje_max = rubrica_dinamica.get("puntaje_maximo", 0)
+        n_items = rubrica_dinamica.get("total_items", 0)
+        logger.info(f"[Auditor] Usando rúbrica dinámica: {n_items} ítems, max={puntaje_max}")
+    else:
+        items = items_de_seccion(seccion_key)
+        items_str = "\n".join(f"- Ítem {it['n']:02d}: {it['desc']}" for it in items)
+        puntaje_max = len(items) * 3
+        logger.info(f"[Auditor] Usando rúbrica UPAO: {len(items)} ítems")
+
+    regla_placeholder = (
+        "\nREGLA: Si el texto contiene '[COMPLETAR: ...]', evalúa ese ítem con puntaje 0 o 1.\n"
     )
 
     task = (
-        f"Evalúa SOLO los siguientes ítems de la rúbrica UPAO para la sección indicada:\n\n"
+        f"Evalúa SOLO los siguientes ítems de la rúbrica para la sección indicada:\n\n"
         f"{items_str}\n\n"
+        f"{regla_placeholder}"
         f"CONTEXTO DE LA SECCIÓN (RAG):\n{contexto_rag}\n\n"
         + (f"CONTEXTO CRUZADO:\n{contexto_cruzado}\n\n" if contexto_cruzado else "")
         + "Responde ÚNICAMENTE con el objeto JSON."
