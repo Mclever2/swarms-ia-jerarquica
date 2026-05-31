@@ -11,12 +11,12 @@ from pathlib import Path
 from swarms import Agent
 
 from backend.config import WORKER_MODEL as MODEL_NAME, SLEEP_BETWEEN_AGENTS
-from backend.utils import run_agent_silently, call_with_backoff, use_groq_key
+from backend.utils import run_agent_silently, call_with_backoff, use_openai_key
 
 logger = logging.getLogger("mentoria")
 _PROMPT_PATH    = Path(__file__).parent.parent / "prompts" / "redactor_prompt.md"
 _DEBATE_PROMPT  = Path(__file__).parent.parent / "prompts" / "debate_redactor_prompt.md"
-_API_KEY = os.getenv("GROQ_KEY_REDACTOR") or os.getenv("GROQ_API_KEY", "")
+_api_key = lambda: os.environ.get("OPENAI_API_KEY", "")
 
 
 def build_redactor() -> Agent:
@@ -59,7 +59,7 @@ def redactar(
     time.sleep(SLEEP_BETWEEN_AGENTS)
 
     def _call():
-        with use_groq_key(_API_KEY):
+        with use_openai_key(_api_key()):
             raw = run_agent_silently(agent, task)
         texto, argumento = _parse_redactor_output(raw)
         logger.info(f"[Redactor] OK — texto: {len(texto)} chars")
@@ -83,7 +83,7 @@ def argumentar(agent: Agent, observaciones: str) -> str:
     time.sleep(SLEEP_BETWEEN_AGENTS)
 
     def _call():
-        with use_groq_key(_API_KEY):
+        with use_openai_key(_api_key()):
             return run_agent_silently(agent, task).strip()
 
     try:

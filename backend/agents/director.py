@@ -35,16 +35,15 @@ from backend.agents.auditor import build_auditor, ReporteAuditor
 from backend.agents.metodologico import build_metodologico
 from backend.agents.redactor import build_redactor
 from backend.agents.herramientas import crear_herramientas
-from backend.utils import run_agent_silently, use_groq_key
+from backend.utils import run_agent_silently, use_openai_key
 
 logger = logging.getLogger("mentoria")
 
 _WS = Path(__file__).parent.parent.parent / "agent_workspace"
 _PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "director_jerarquico_prompt.md"
-_API_KEY = os.getenv("GROQ_KEY_DIRECTOR") or os.getenv("GROQ_API_KEY", "")
+_api_key = lambda: os.environ.get("OPENAI_API_KEY", "")
 
-# El Director usa el modelo más capaz para tomar decisiones de orquestación
-_DIRECTOR_MODEL = WORKER_MODEL  # groq/llama-3.3-70b-versatile
+_DIRECTOR_MODEL = WORKER_MODEL
 
 
 def _build_director_con_herramientas(herramientas: list) -> Agent:
@@ -177,7 +176,7 @@ class DirectorOrchestrator:
             f"teorico={len(contexto_teorico)}c"
         )
 
-        with use_groq_key(_API_KEY):
+        with use_openai_key(_api_key()):
             veredicto = run_agent_silently(director, tarea_director)
 
         # ── Garantizar Consenso y Disenso ─────────────────────────────────────

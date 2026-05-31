@@ -13,12 +13,11 @@ from typing import List
 from swarms import Agent
 
 from backend.config import MAX_RONDAS_DEBATE
-from backend.utils import extract_json, run_agent_silently, call_with_backoff, use_groq_key
+from backend.utils import extract_json, run_agent_silently, call_with_backoff, use_openai_key
 
 logger = logging.getLogger("mentoria")
 _DEBATE_EVAL_PROMPT = Path(__file__).parent.parent / "prompts" / "debate_evaluador_prompt.md"
-_AUDITOR_KEY  = os.getenv("GROQ_KEY_AUDITOR")  or os.getenv("GROQ_API_KEY", "")
-_METOD_KEY    = os.getenv("GROQ_KEY_METODOLOGICO") or os.getenv("GROQ_API_KEY", "")
+_api_key = lambda: os.environ.get("OPENAI_API_KEY", "")
 
 
 def _solicitar_veredicto(evaluador: Agent, api_key: str, argumento_redactor: str,
@@ -34,7 +33,7 @@ def _solicitar_veredicto(evaluador: Agent, api_key: str, argumento_redactor: str
     time.sleep(5)
 
     def _call():
-        with use_groq_key(api_key):
+        with use_openai_key(_api_key()):
             raw = run_agent_silently(evaluador, task)
         return extract_json(raw)
 

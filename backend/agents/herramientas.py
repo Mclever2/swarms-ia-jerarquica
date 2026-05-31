@@ -250,11 +250,10 @@ def crear_herramientas(
         if not feedback_aud and not obs_metod:
             return "CONSENSO: No hay reportes disponibles. Convoca al Auditor y al Metodólogo primero."
 
-        from langchain_groq import ChatGroq
-        model_name = WORKER_MODEL.replace("groq/", "")
-        llm = ChatGroq(
-            api_key=os.getenv("GROQ_KEY_CONSENSO") or os.getenv("GROQ_API_KEY"),
-            model=model_name,
+        from langchain_openai import ChatOpenAI
+        llm = ChatOpenAI(
+            api_key=os.getenv("OPENAI_API_KEY"),
+            model="gpt-4o-mini",
             temperature=0.2,
         )
 
@@ -298,11 +297,10 @@ def crear_herramientas(
         if not feedback_aud and not obs_metod:
             return "DISENSO: No hay reportes disponibles. Convoca al Auditor y al Metodólogo primero."
 
-        from langchain_groq import ChatGroq
-        model_name = WORKER_MODEL.replace("groq/", "")
-        llm = ChatGroq(
-            api_key=os.getenv("GROQ_KEY_DISENSO") or os.getenv("GROQ_API_KEY"),
-            model=model_name,
+        from langchain_openai import ChatOpenAI
+        llm = ChatOpenAI(
+            api_key=os.getenv("OPENAI_API_KEY"),
+            model="gpt-4o-mini",
             temperature=0.2,
         )
 

@@ -35,7 +35,7 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 
-load_dotenv()
+load_dotenv(override=True)
 
 from backend.agents.director import DirectorOrchestrator
 from backend.rag.library_store import get_library_store
@@ -54,7 +54,5 @@ def get_library():
 
 
 def check_api_key() -> bool:
-    """Verifica que al menos una clave de Groq esté configurada."""
-    keys = ["GROQ_API_KEY", "GROQ_KEY_DIRECTOR", "GROQ_KEY_AUDITOR",
-            "GROQ_KEY_METODOLOGICO", "GROQ_KEY_REDACTOR"]
-    return any(os.getenv(k) for k in keys)
+    """Verifica que la clave de OpenAI esté configurada."""
+    return bool(os.getenv("OPENAI_API_KEY"))

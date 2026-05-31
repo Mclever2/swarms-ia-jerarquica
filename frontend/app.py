@@ -7,10 +7,14 @@ import sys
 import os
 import logging
 from pathlib import Path
+from dotenv import load_dotenv
 
-# Añadir la raíz del proyecto al path para que Streamlit encuentre los módulos
-# (Streamlit agrega frontend/ al sys.path pero no mentoria_swarms/)
+# Cargar .env ANTES de cualquier import de backend para que los módulos
+# capturen las variables correctas al ejecutar su código a nivel de módulo.
+# override=True garantiza que .env sobreescribe variables del sistema.
 _ROOT = Path(__file__).parent.parent
+load_dotenv(_ROOT / ".env", override=True)
+
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
@@ -57,9 +61,8 @@ sidebar.render()
 # ── Guardia de API key ────────────────────────────────────────────────────────
 if not check_api_key():
     st.error(
-        "⚠️ **No se encontró ninguna clave de API de Groq.**\n\n"
-        "Configura `GROQ_API_KEY` (o las claves individuales) en el archivo `.env` "
-        "y reinicia la aplicación."
+        "⚠️ **No se encontró la clave de API de OpenAI.**\n\n"
+        "Configura `OPENAI_API_KEY` en el archivo `.env` y reinicia la aplicación."
     )
     st.stop()
 

@@ -4,7 +4,7 @@ Utilidades compartidas para todos los agentes del enjambre.
 - run_agent_silently: ejecuta un swarms Agent suprimiendo stdout/stderr
 - extract_json: extrae el primer objeto JSON válido de la respuesta del LLM
 - call_with_backoff: reintenta una llamada con backoff exponencial
-- use_groq_key: context manager que inyecta la API key de Groq adecuada
+- use_openai_key: context manager que inyecta la API key de OpenAI adecuada
 """
 from __future__ import annotations
 
@@ -117,34 +117,30 @@ def call_with_backoff(
 # ── Context manager de API key ────────────────────────────────────────────────
 
 @contextmanager
-def use_groq_key(api_key: str):
+def use_openai_key(api_key: str):
     """
-    Inyecta temporalmente una clave Groq en el entorno para el agente activo.
+    Inyecta temporalmente la clave OpenAI en el entorno para el agente activo.
     Restaura el valor anterior al salir del bloque.
 
     Uso:
-        with use_groq_key(GROQ_KEY_AUDITOR):
+        with use_openai_key(OPENAI_API_KEY):
             result = agent.run(task)
     """
     if not api_key:
         yield
         return
 
-    prev_groq  = os.environ.get("GROQ_API_KEY")
-    prev_oai   = os.environ.get("OPENAI_API_KEY")
-
-    os.environ["GROQ_API_KEY"]  = api_key
-    os.environ["OPENAI_API_KEY"] = api_key  # litellm también lo lee
+    prev_oai = os.environ.get("OPENAI_API_KEY")
+    os.environ["OPENAI_API_KEY"] = api_key
 
     try:
         yield
     finally:
-        if prev_groq is None:
-            os.environ.pop("GROQ_API_KEY", None)
-        else:
-            os.environ["GROQ_API_KEY"] = prev_groq
-
         if prev_oai is None:
             os.environ.pop("OPENAI_API_KEY", None)
         else:
             os.environ["OPENAI_API_KEY"] = prev_oai
+
+
+# Alias de compatibilidad para código legado
+use_groq_key = use_openai_key

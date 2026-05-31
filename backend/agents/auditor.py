@@ -13,11 +13,11 @@ from pydantic import BaseModel, Field
 from swarms import Agent
 
 from backend.config import WORKER_MODEL as MODEL_NAME, SLEEP_BETWEEN_AGENTS, items_de_seccion
-from backend.utils import extract_json, run_agent_silently, call_with_backoff, use_groq_key
+from backend.utils import extract_json, run_agent_silently, call_with_backoff, use_openai_key
 
 logger = logging.getLogger("mentoria")
 _PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "auditor_prompt.md"
-_API_KEY = os.getenv("GROQ_KEY_AUDITOR") or os.getenv("GROQ_API_KEY", "")
+_api_key = lambda: os.environ.get("OPENAI_API_KEY", "")
 
 
 # ── Pydantic output ───────────────────────────────────────────────────────────
@@ -98,7 +98,7 @@ def evaluar_seccion(
     time.sleep(SLEEP_BETWEEN_AGENTS)
 
     def _call():
-        with use_groq_key(_API_KEY):
+        with use_openai_key(_api_key()):
             raw = run_agent_silently(agent, task)
         data = extract_json(raw)
         items_ev = [ItemEvaluado(**i) for i in data.get("items_evaluados", [])]

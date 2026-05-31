@@ -18,11 +18,11 @@ BOOKS_PRELOAD_DIR: str   = str(_BASE_DIR / "books")
 MAX_ITERACIONES: int = int(os.getenv("MAX_ITERACIONES", "3"))
 MAX_RONDAS_DEBATE: int = int(os.getenv("MAX_RONDAS_DEBATE", "2"))
 
-DIRECTOR_MODEL: str = os.getenv("DIRECTOR_MODEL", "groq/meta-llama/llama-4-scout-17b-16e-instruct")
-WORKER_MODEL: str   = os.getenv("WORKER_MODEL",   "groq/meta-llama/llama-4-scout-17b-16e-instruct")
+DIRECTOR_MODEL: str = os.getenv("DIRECTOR_MODEL", "gpt-4o-mini")
+WORKER_MODEL: str   = os.getenv("WORKER_MODEL",   "gpt-4o-mini")
 MODEL_NAME: str     = WORKER_MODEL  # alias de compatibilidad
 
-SLEEP_BETWEEN_AGENTS: int = int(os.getenv("SLEEP_BETWEEN_AGENTS", "25"))
+SLEEP_BETWEEN_AGENTS: int = int(os.getenv("SLEEP_BETWEEN_AGENTS", "1"))
 MAX_CONTEXT_CHARS: int = 1200
 
 # ── Rúbrica oficial UPAO — 33 ítems ──────────────────────────────────────────

@@ -21,9 +21,9 @@ def render():
 
         # ── Estado de API ──────────────────────────────────────────────────
         if check_api_key():
-            st.success("✅ Groq API conectada")
+            st.success("✅ API de Inteligencia Artificial conectada")
         else:
-            st.error("❌ Sin clave Groq — configure .env")
+            st.error("❌ Sin API — configure .env")
 
         st.divider()
 

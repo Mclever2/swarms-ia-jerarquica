@@ -17,7 +17,7 @@ from pathlib import Path
 from swarms import Agent
 
 from backend.config import DIRECTOR_MODEL, SLEEP_BETWEEN_AGENTS, MAX_ITERACIONES
-from backend.utils import run_agent_silently, call_with_backoff, use_groq_key
+from backend.utils import run_agent_silently, call_with_backoff, use_openai_key
 from backend.agents.auditor import ReporteAuditor
 
 logger = logging.getLogger("mentoria")
@@ -26,7 +26,7 @@ _PLAN_PROMPT      = Path(__file__).parent.parent / "prompts" / "director_plan_pr
 _SINTESIS_PROMPT  = Path(__file__).parent.parent / "prompts" / "director_sintesis_prompt.md"
 _VEREDICTO_PROMPT = Path(__file__).parent.parent / "prompts" / "director_veredicto_prompt.md"
 
-_API_KEY = os.getenv("GROQ_KEY_DIRECTOR") or os.getenv("GROQ_API_KEY", "")
+_api_key = lambda: os.environ.get("OPENAI_API_KEY", "")
 
 
 def build_director_agent() -> Agent:
@@ -56,7 +56,7 @@ def planificar(director: Agent, seccion_key: str, contexto: str) -> str:
     time.sleep(SLEEP_BETWEEN_AGENTS)
 
     def _call():
-        with use_groq_key(_API_KEY):
+        with use_openai_key(_api_key()):
             return run_agent_silently(director, task).strip()
 
     return call_with_backoff(_call)
@@ -85,7 +85,7 @@ def sintetizar(
     time.sleep(SLEEP_BETWEEN_AGENTS)
 
     def _call():
-        with use_groq_key(_API_KEY):
+        with use_openai_key(_api_key()):
             return run_agent_silently(director, task).strip()
 
     return call_with_backoff(_call)
@@ -108,7 +108,7 @@ def veredicto_final(
     time.sleep(SLEEP_BETWEEN_AGENTS)
 
     def _call():
-        with use_groq_key(_API_KEY):
+        with use_openai_key(_api_key()):
             return run_agent_silently(director, task).strip()
 
     return call_with_backoff(_call)
