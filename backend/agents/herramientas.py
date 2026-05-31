@@ -28,7 +28,7 @@ import os
 import time
 from typing import Callable
 
-from backend.config import SLEEP_BETWEEN_AGENTS
+from backend.config import SLEEP_BETWEEN_AGENTS, WORKER_MODEL
 from backend.agents.auditor import evaluar_seccion, ReporteAuditor
 from backend.agents.metodologico import analizar_coherencia
 from backend.agents.redactor import redactar
@@ -74,14 +74,7 @@ def crear_herramientas(
 
     def convocar_auditor() -> str:
         """
-        Convoca al Agente Auditor para evaluar los ítems de la rúbrica de la sección actual.
-
-        Si el estudiante subió su propia rúbrica, usa esos ítems.
-        Si no, usa la rúbrica oficial UPAO (33 ítems, escala 0-3).
-        Un ítem aprueba si puntaje >= 2. La sección aprueba si TODOS aprueban.
-
-        Retorna reporte con puntajes, observaciones por ítem y feedback general.
-        Usar como PRIMER PASO antes de cualquier mejora textual.
+        Convoca al Auditor para evaluar los ítems de la rúbrica para la sección actual.
         """
         if progress_cb:
             progress_cb(None, "[Jerarquía] Director → Auditor: evaluando rúbrica...")
@@ -118,14 +111,7 @@ def crear_herramientas(
 
     def convocar_metodologico() -> str:
         """
-        Convoca al Agente Metodólogo para analizar el rigor científico y la
-        coherencia entre secciones del proyecto de tesis UPAO.
-
-        El Metodólogo verifica consistencia con secciones relacionadas
-        (título, problema, hipótesis, metodología) según dependencias cruzadas.
-        Retorna observaciones narrativas numeradas.
-
-        Usar DESPUÉS del Auditor, antes de instruir al Redactor.
+        Convoca al Metodólogo para analizar el rigor científico y coherencia cruzada.
         """
         if progress_cb:
             progress_cb(None, "[Jerarquía] Director → Metodólogo: analizando coherencia...")
@@ -145,18 +131,7 @@ def crear_herramientas(
 
     def convocar_redactor(instrucciones: str) -> str:
         """
-        Convoca al Agente Redactor para producir texto académico mejorado
-        según las instrucciones del Director.
-
-        Args:
-            instrucciones: Guía específica del Director que incluye los ítems
-                a corregir, observaciones del Auditor y del Metodólogo,
-                nivel académico esperado y sección del documento a mejorar.
-
-        IMPORTANTE: El Redactor NO puede inventar contenido. Si falta información
-        real del estudiante, usa placeholders [COMPLETAR: descripción].
-        Retorna el texto mejorado. Puede llamarse más de una vez para refinamiento.
-        Usar DESPUÉS de analizar los reportes del Auditor y el Metodólogo.
+        Convoca al Redactor para producir texto académico mejorado según instrucciones.
         """
         if not instrucciones or not instrucciones.strip():
             return "ERROR: instrucciones vacías. El Director debe proporcionar guía específica."
@@ -184,17 +159,7 @@ def crear_herramientas(
 
     def revisar_texto_auditor(texto_propuesto: str, items_a_verificar: str) -> str:
         """
-        Convoca al Agente Auditor para evaluar un texto propuesto por el Redactor.
-        Acción atómica: UN solo agente, UN solo resultado.
-
-        Args:
-            texto_propuesto:   Texto producido por el Redactor que se somete a revisión.
-            items_a_verificar: Ítems específicos a verificar
-                               (ej: "Ítems 4, 5, 9 — verificar formulación del problema").
-
-        Retorna reporte del Auditor sobre el texto propuesto.
-        El Director debe llamar también a revisar_texto_metodologico() y sintetizar ambos.
-        Usar después de que el Redactor produjo texto y se quiere validar antes de aprobar.
+        Convoca al Auditor para evaluar si el texto mejorado cumple con ítems específicos.
         """
         if progress_cb:
             progress_cb(None, "[Jerarquía] Director → Auditor: revisando texto propuesto...")
@@ -202,17 +167,23 @@ def crear_herramientas(
             f"[Tool] Director delegó revisión a Auditor | ítems='{items_a_verificar[:60]}'"
         )
 
+        # NOTA: el texto propuesto se inyecta dentro del campo contexto_rag
+        # para que el Auditor lo trate como el texto a evaluar. NO se limpia el
+        # historial (eso borra el system_prompt y produce JSON vacío); en cambio,
+        # el contexto explícito tiene precedencia sobre el historial previo.
         contexto_revision = (
-            f"TEXTO PROPUESTO POR EL REDACTOR:\n{texto_propuesto[:1500]}\n\n"
+            f"TEXTO PROPUESTO POR EL REDACTOR (evalúa este texto, NO el original):\n"
+            f"{texto_propuesto[:1500]}\n\n"
             f"ÍTEMS A VERIFICAR: {items_a_verificar}\n\n"
-            f"CONTEXTO ORIGINAL DE LA SECCIÓN:\n{contexto_rag[:500]}"
+            f"CONTEXTO ORIGINAL DE LA SECCIÓN (referencia):\n{contexto_rag[:400]}"
         )
 
         reporte_rev: ReporteAuditor = evaluar_seccion(
             auditor_agent, seccion_key, contexto_revision, "",
             rubrica_dinamica=rubrica_dinamica,
         )
-        state["reporte"] = reporte_rev
+        # Guardar en clave separada para NO sobreescribir el reporte inicial del estudiante
+        state["reporte_revision"] = reporte_rev
         state["iteraciones_auditor"] = state.get("iteraciones_auditor", 0) + 1
 
         lineas = [
@@ -235,18 +206,7 @@ def crear_herramientas(
 
     def revisar_texto_metodologico(texto_propuesto: str, observaciones_a_verificar: str) -> str:
         """
-        Convoca al Agente Metodólogo para verificar que un texto propuesto por el
-        Redactor levanta las observaciones metodológicas previas.
-        Acción atómica: UN solo agente, UN solo resultado.
-
-        Args:
-            texto_propuesto:            Texto del Redactor a revisar.
-            observaciones_a_verificar:  Observaciones metodológicas específicas
-                                        que se quiere confirmar levantadas.
-
-        Retorna análisis del Metodólogo sobre el texto propuesto.
-        El Director debe llamar también a revisar_texto_auditor() y sintetizar ambos.
-        Usar junto con revisar_texto_auditor() para validación completa antes de aprobar.
+        Convoca al Metodólogo para validar que el texto mejorado levantó observaciones.
         """
         if progress_cb:
             progress_cb(None, "[Jerarquía] Director → Metodólogo: revisando texto propuesto...")
@@ -255,16 +215,17 @@ def crear_herramientas(
         )
 
         contexto_revision = (
-            f"TEXTO PROPUESTO POR EL REDACTOR:\n{texto_propuesto[:1500]}\n\n"
+            f"TEXTO PROPUESTO POR EL REDACTOR (evalúa este texto, NO el original):\n"
+            f"{texto_propuesto[:1500]}\n\n"
             f"OBSERVACIONES A VERIFICAR: {observaciones_a_verificar}\n\n"
-            f"CONTEXTO ORIGINAL DE LA SECCIÓN:\n{contexto_rag[:500]}"
+            f"CONTEXTO ORIGINAL DE LA SECCIÓN (referencia):\n{contexto_rag[:400]}"
         )
 
         obs_rev = analizar_coherencia(
             metodologico_agent, seccion_key, contexto_revision, contexto_cruzado,
             contexto_teorico=contexto_teorico,
         )
-        state["obs_metod"] = obs_rev
+        state["obs_metod_revision"] = obs_rev
         state["iteraciones_metodologico"] = state.get("iteraciones_metodologico", 0) + 1
 
         logger.info(f"[Tool] Metodólogo (revisión) completó | {len(obs_rev)} chars")
@@ -276,14 +237,7 @@ def crear_herramientas(
 
     def convocar_consenso() -> str:
         """
-        Analiza los reportes del Auditor y el Metodólogo e identifica los PUNTOS DE ACUERDO.
-
-        Útil cuando ambos evaluadores ya emitieron sus reportes y el Director quiere
-        saber qué observaciones tienen mayor consenso para priorizar instrucciones al Redactor.
-        Retorna: acuerdos detectados, fortalezas consensuadas, prioridad de corrección.
-
-        Usar DESPUÉS de convocar_auditor() y convocar_metodologico().
-        NO usar si ninguno de los dos evaluadores ha emitido reporte aún.
+        Identifica puntos de acuerdo y prioridades de corrección entre evaluadores.
         """
         if progress_cb:
             progress_cb(None, "[Jerarquía] Director → Análisis de Consenso...")
@@ -297,9 +251,10 @@ def crear_herramientas(
             return "CONSENSO: No hay reportes disponibles. Convoca al Auditor y al Metodólogo primero."
 
         from langchain_groq import ChatGroq
+        model_name = WORKER_MODEL.replace("groq/", "")
         llm = ChatGroq(
             api_key=os.getenv("GROQ_KEY_CONSENSO") or os.getenv("GROQ_API_KEY"),
-            model="llama-3.3-70b-versatile",
+            model=model_name,
             temperature=0.2,
         )
 
@@ -330,15 +285,7 @@ def crear_herramientas(
 
     def convocar_disenso() -> str:
         """
-        Analiza los reportes del Auditor y el Metodólogo e identifica los CONFLICTOS.
-
-        Útil cuando las evaluaciones son contradictorias: el Auditor aprueba un ítem
-        pero el Metodólogo detecta incoherencia, o viceversa. El Director recibe
-        la síntesis del conflicto para arbitrar y decidir cómo instruir al Redactor.
-        Retorna: conflictos detectados, brechas de evaluación, recomendación al Director.
-
-        Usar DESPUÉS de convocar_auditor() y convocar_metodologico(), cuando sus
-        reportes parecen contradecirse.
+        Identifica contradicciones y brechas de evaluación entre evaluadores para arbitraje.
         """
         if progress_cb:
             progress_cb(None, "[Jerarquía] Director → Análisis de Disenso...")
@@ -352,9 +299,10 @@ def crear_herramientas(
             return "DISENSO: No hay reportes disponibles. Convoca al Auditor y al Metodólogo primero."
 
         from langchain_groq import ChatGroq
+        model_name = WORKER_MODEL.replace("groq/", "")
         llm = ChatGroq(
             api_key=os.getenv("GROQ_KEY_DISENSO") or os.getenv("GROQ_API_KEY"),
-            model="llama-3.3-70b-versatile",
+            model=model_name,
             temperature=0.2,
         )
 

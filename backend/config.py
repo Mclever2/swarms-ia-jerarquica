@@ -18,12 +18,12 @@ BOOKS_PRELOAD_DIR: str   = str(_BASE_DIR / "books")
 MAX_ITERACIONES: int = int(os.getenv("MAX_ITERACIONES", "3"))
 MAX_RONDAS_DEBATE: int = int(os.getenv("MAX_RONDAS_DEBATE", "2"))
 
-DIRECTOR_MODEL: str = os.getenv("DIRECTOR_MODEL", "groq/llama-3.1-8b-instant")
-WORKER_MODEL: str   = os.getenv("WORKER_MODEL",   "groq/llama-3.3-70b-versatile")
+DIRECTOR_MODEL: str = os.getenv("DIRECTOR_MODEL", "groq/meta-llama/llama-4-scout-17b-16e-instruct")
+WORKER_MODEL: str   = os.getenv("WORKER_MODEL",   "groq/meta-llama/llama-4-scout-17b-16e-instruct")
 MODEL_NAME: str     = WORKER_MODEL  # alias de compatibilidad
 
-SLEEP_BETWEEN_AGENTS: int = int(os.getenv("SLEEP_BETWEEN_AGENTS", "20"))
-MAX_CONTEXT_CHARS: int = 2_000
+SLEEP_BETWEEN_AGENTS: int = int(os.getenv("SLEEP_BETWEEN_AGENTS", "25"))
+MAX_CONTEXT_CHARS: int = 1200
 
 # ── Rúbrica oficial UPAO — 33 ítems ──────────────────────────────────────────
 # Importado de la versión GraphRAG para un código mucho más limpio y mantenible
@@ -154,6 +154,10 @@ SECCIONES_TESIS: List[Dict] = [
     {"nombre": k, "label": v["label"], "query": SECTION_QUERIES[k]}
     for k, v in SECCIONES.items()
 ]
+
+
+# Mapa sección-config → ítems de rúbrica; usado por pantalla_seleccion para mostrar qué evalúa
+SECCION_ITEMS_MAP: Dict[str, List[int]] = {k: v["nums"] for k, v in SECCIONES.items()}
 
 
 def get_texto_rubrica_para_seccion(seccion_key: str) -> str:

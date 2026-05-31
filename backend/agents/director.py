@@ -119,6 +119,7 @@ class DirectorOrchestrator:
                       veredicto_director, nota_vigesimal, aprobado, log_herramientas
         """
         _clear_ws()
+        _init_ws()
 
         # State compartido: las herramientas depositan sus resultados aquí
         state: dict = {
@@ -147,6 +148,9 @@ class DirectorOrchestrator:
             rubrica_dinamica=rubrica_dinamica,
             contexto_teorico=contexto_teorico,
         )
+        # Guardar referencias directas para el fallback garantizado
+        _fn_consenso = herramientas[5]  # convocar_consenso
+        _fn_disenso  = herramientas[6]  # convocar_disenso
 
         # Construir el Director con sus herramientas para esta sesión
         director = _build_director_con_herramientas(herramientas)
@@ -176,11 +180,49 @@ class DirectorOrchestrator:
         with use_groq_key(_API_KEY):
             veredicto = run_agent_silently(director, tarea_director)
 
+        # ── Garantizar Consenso y Disenso ─────────────────────────────────────
+        # El Director LLM puede omitirlos por límite de loops/tokens.
+        # Si ambos evaluadores respondieron (reporte + obs_metod), los ejecutamos
+        # directamente desde Python para que el frontend siempre tenga datos.
+        if state.get("reporte") and state.get("obs_metod"):
+            if not state.get("resultado_consenso"):
+                logger.info("[Director] Director no activó Consenso — ejecutando automáticamente.")
+                try:
+                    if progress_cb:
+                        progress_cb(None, "Calculando análisis de Consenso...")
+                    _fn_consenso()
+                except Exception as _e:
+                    logger.warning(f"[Director] Consenso automático falló: {_e}")
+
+            if not state.get("resultado_disenso"):
+                logger.info("[Director] Director no activó Disenso — ejecutando automáticamente.")
+                try:
+                    if progress_cb:
+                        progress_cb(None, "Calculando análisis de Disenso...")
+                    _fn_disenso()
+                except Exception as _e:
+                    logger.warning(f"[Director] Disenso automático falló: {_e}")
+
         if progress_cb:
             progress_cb(0.97, "Director emitiendo veredicto final...")
 
+        # Usar siempre el reporte del texto ORIGINAL del estudiante.
+        # state["reporte_revision"] (del texto mejorado) se guarda aparte
+        # y no debe pisar las métricas que el estudiante ve.
         reporte: ReporteAuditor | None = state.get("reporte")
-        nota = puntaje_a_nota(reporte.puntaje_total if reporte else 0)
+
+        if reporte and reporte.items_evaluados:
+            puntaje_max = len(reporte.items_evaluados) * 3
+            puntaje_pct = round(reporte.puntaje_total / puntaje_max * 100)
+        else:
+            puntaje_pct = 0
+        nota = puntaje_a_nota(puntaje_pct)
+
+        # Si el Director fue interrumpido (rate limit) sin emitir el veredicto
+        # en el formato estándar, construir uno automático con los datos disponibles.
+        if "VEREDICTO DIRECTOR" not in veredicto.upper():
+            veredicto = _construir_veredicto_fallback(reporte, nota, seccion_key)
+            logger.warning("[Director] Veredicto no emitido por el LLM — usando fallback automático.")
 
         log_herramientas = (
             f"Llamadas del Director → "
@@ -205,6 +247,55 @@ class DirectorOrchestrator:
         }
 
 
+def _construir_veredicto_fallback(reporte, nota: int, seccion_key: str) -> str:
+    """
+    Genera un veredicto mínimo cuando el Director LLM fue interrumpido
+    (p.ej. por Rate Limit) antes de emitir el bloque VEREDICTO DIRECTOR.
+    Se basa en el reporte del Auditor que sí completó su evaluación.
+    """
+    if not reporte or not reporte.items_evaluados:
+        return (
+            f"VEREDICTO DIRECTOR — SECCIÓN: {seccion_key}\n\n"
+            "NOTA ESTIMADA: —/20\n"
+            "ESTADO: SIN DATOS ⚠️\n\n"
+            "El Director fue interrumpido antes de completar la evaluación.\n"
+            "Reintenta para obtener un análisis completo."
+        )
+
+    estado_str = "APROBADO ✅" if reporte.aprobado else "OBSERVADO ⚠️"
+    aprobados  = [i for i in reporte.items_evaluados if i.puntaje >= 2]
+    observados = [i for i in reporte.items_evaluados if i.puntaje < 2]
+
+    fortalezas = "\n".join(
+        f"- Ítem {i.item_numero:02d} ({i.puntaje}/3): {i.observacion[:120]}"
+        for i in aprobados
+    ) or "- Sin fortalezas detectadas."
+
+    obs_lines = "\n".join(
+        f"- Ítem {i.item_numero:02d} ({i.puntaje}/3): {i.observacion[:120]}"
+        for i in observados
+    ) or "- Sin observaciones críticas."
+
+    return (
+        f"VEREDICTO DIRECTOR — SECCIÓN: {seccion_key}\n\n"
+        f"NOTA ESTIMADA: {nota}/20\n"
+        f"ESTADO: {estado_str}\n\n"
+        f"FORTALEZAS DETECTADAS:\n{fortalezas}\n\n"
+        f"OBSERVACIONES PRINCIPALES:\n{obs_lines}\n\n"
+        f"RECOMENDACIÓN AL ESTUDIANTE:\n"
+        f"Revisa los ítems marcados como OBSERVADO y corrige las debilidades señaladas "
+        f"por el Auditor antes de la siguiente entrega.\n\n"
+        f"DECISIÓN DE LA MENTORÍA:\n"
+        f"{'Aprobado para presentar.' if reporte.aprobado else 'Requiere corrección.'}\n\n"
+        f"_(Veredicto generado automáticamente — el Director fue interrumpido por Rate Limit)_"
+    )
+
+
 def _clear_ws():
     if _WS.exists():
         shutil.rmtree(_WS, ignore_errors=True)
+
+
+def _init_ws():
+    for agent_name in ["Auditor UPAO", "Metodólogo UPAO", "Redactor Académico", "Director Mentor UPAO"]:
+        (_WS / "agents" / agent_name).mkdir(parents=True, exist_ok=True)

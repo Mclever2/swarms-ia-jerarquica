@@ -5,40 +5,62 @@ multilingual-e5-small requiere prefijos semánticos para funcionar correctamente
   - Queries de búsqueda  → "query: <texto>"
   - Documentos indexados → "passage: <texto>"
 
-MultilingualE5Embeddings sobreescribe embed_query/embed_documents para inyectarlos
-automáticamente, de modo que ChromaDB los recibe ya prefijados sin cambios en el resto del código.
+Implementación directa con transformers (sin sentence-transformers) para evitar
+problemas de mmap en Windows y compatibilidad con sentence-transformers 3.x.
 """
 
 import logging
 
-from langchain_huggingface import HuggingFaceEmbeddings
+import torch
+from langchain_core.embeddings import Embeddings
+from transformers import AutoModel, AutoTokenizer
 
 logger = logging.getLogger(__name__)
 
 MODELO_EMBEDDING = "intfloat/multilingual-e5-small"
 
 
-class MultilingualE5Embeddings(HuggingFaceEmbeddings):
-    """HuggingFaceEmbeddings con prefijos query:/passage: para e5-small."""
+def _mean_pool(last_hidden_state: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
+    mask = attention_mask[..., None].bool()
+    hidden = last_hidden_state.masked_fill(~mask, 0.0)
+    return hidden.sum(dim=1) / attention_mask.sum(dim=1)[..., None]
+
+
+class MultilingualE5Embeddings(Embeddings):
+    """E5-small con prefijos query:/passage: y mean pooling."""
+
+    def __init__(self, model_name: str = MODELO_EMBEDDING):
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModel.from_pretrained(model_name, use_safetensors=False)
+        self.model.eval()
+
+    def _encode(self, texts: list) -> list:
+        batch = self.tokenizer(
+            texts, max_length=512, padding=True, truncation=True, return_tensors="pt"
+        )
+        with torch.no_grad():
+            outputs = self.model(**batch)
+        embeddings = _mean_pool(outputs.last_hidden_state, batch["attention_mask"])
+        embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
+        return embeddings.tolist()
 
     def embed_documents(self, texts: list) -> list:
-        prefixed = [f"passage: {t}" for t in texts]
-        return super().embed_documents(prefixed)
+        return self._encode([f"passage: {t}" for t in texts])
 
     def embed_query(self, text: str) -> list:
-        return super().embed_query(f"query: {text}")
+        return self._encode([f"query: {text}"])[0]
+
+
+_singleton: MultilingualE5Embeddings | None = None
 
 
 def cargar_modelo_embeddings() -> MultilingualE5Embeddings:
     """
-    Carga multilingual-e5-small en CPU (~117 MB en la primera descarga).
-    Las siguientes ejecuciones usan la caché local de sentence-transformers.
-
-    NOTA: Llamar con @st.cache_resource en Streamlit para no recargar en cada rerun.
+    Carga multilingual-e5-small en CPU (~117 MB).
+    Singleton de proceso: múltiples llamadas devuelven la misma instancia.
     """
-    logger.info(f"Cargando modelo de embeddings: {MODELO_EMBEDDING}")
-    return MultilingualE5Embeddings(
-        model_name=MODELO_EMBEDDING,
-        model_kwargs={"device": "cpu"},
-        encode_kwargs={"normalize_embeddings": True},
-    )
+    global _singleton
+    if _singleton is None:
+        logger.info(f"Cargando modelo de embeddings: {MODELO_EMBEDDING}")
+        _singleton = MultilingualE5Embeddings()
+    return _singleton

@@ -19,15 +19,39 @@ _PDFPLUMBER_WARNINGS = [
 
 # Detecta líneas de índice/TOC: "Título del capítulo ......... 12"
 _RE_TOC_LINEA = re.compile(r'\.{4,}\s*\d{1,4}\s*$')
+# Parsea una entrada de TOC: "3.3 Título de sección .... 22"
+_RE_ENTRADA_TOC = re.compile(
+    r'^(\d[\d\.\-–]*\.?\s*[A-ZÁÉÍÓÚÜÑ][^\.]{3,}?)\s*\.{3,}\s*(\d{1,4})\s*$',
+    re.IGNORECASE,
+)
 _UMBRAL_PAGINA_TOC = 0.28  # si ≥28 % de líneas son TOC → omitir página
 
 
+def _ratio_lineas_toc(texto_pagina: str) -> float:
+    lineas = [l.strip() for l in texto_pagina.split('\n') if l.strip()]
+    if len(lineas) < 2:
+        return 0.0
+    n_toc = sum(1 for l in lineas if _RE_TOC_LINEA.search(l))
+    return n_toc / len(lineas)
+
+
 def _es_pagina_indice(texto: str) -> bool:
-    lineas = [l for l in texto.split('\n') if l.strip()]
-    if not lineas:
-        return False
-    matches = sum(1 for l in lineas if _RE_TOC_LINEA.search(l.strip()))
-    return matches / len(lineas) >= _UMBRAL_PAGINA_TOC
+    return _ratio_lineas_toc(texto) >= _UMBRAL_PAGINA_TOC
+
+
+def _parsear_toc(paginas_toc: list) -> dict:
+    """Extrae la estructura del índice: {nombre_seccion: numero_pagina}."""
+    estructura: dict = {}
+    for texto in paginas_toc:
+        for linea in texto.split('\n'):
+            m = _RE_ENTRADA_TOC.match(linea.strip())
+            if m:
+                nombre = re.sub(r'\s+', ' ', m.group(1)).strip()
+                try:
+                    estructura[nombre] = int(m.group(2))
+                except ValueError:
+                    pass
+    return estructura
 
 
 def extraer_texto_pdf(pdf_bytes: bytes) -> str:
@@ -72,6 +96,58 @@ def extraer_texto_pdf(pdf_bytes: bytes) -> str:
         f"{len(resultado):,} caracteres totales"
     )
     return resultado
+
+
+def extraer_contenido_sin_indice(
+    pdf_bytes: bytes,
+) -> tuple:
+    """
+    Extrae el texto del PDF separando contenido real de páginas de índice/TOC.
+
+    Devuelve:
+        paginas_contenido: lista de (numero_pagina_1indexed, texto_pagina).
+        estructura_toc:    dict {nombre_sección → numero_pagina_inicio}.
+    """
+    paginas_contenido: list = []
+    paginas_toc_texto: list = []
+    n_toc = 0
+
+    try:
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message="Cannot set.*color")
+            with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+                total = len(pdf.pages)
+                for i, pagina in enumerate(pdf.pages):
+                    numero_pagina = i + 1
+                    texto = pagina.extract_text()
+                    if not texto or not texto.strip():
+                        continue
+
+                    ratio = _ratio_lineas_toc(texto)
+                    if ratio >= _UMBRAL_PAGINA_TOC:
+                        n_toc += 1
+                        paginas_toc_texto.append(texto)
+                        logger.info(
+                            f"Pág. {numero_pagina}/{total}: ÍNDICE (ratio={ratio:.2f}) — excluida del RAG"
+                        )
+                    else:
+                        paginas_contenido.append((numero_pagina, texto.strip()))
+    except Exception as exc:
+        logger.error(f"Error extrayendo contenido sin índice: {exc}")
+        raise
+
+    estructura_toc = _parsear_toc(paginas_toc_texto)
+
+    logger.info(
+        f"Extracción inteligente: {len(paginas_contenido)} páginas de contenido, "
+        f"{n_toc} páginas de índice omitidas, "
+        f"{len(estructura_toc)} secciones detectadas en TOC"
+    )
+    if estructura_toc:
+        secciones_str = ', '.join(list(estructura_toc.keys())[:6])
+        logger.info(f"Estructura TOC: {secciones_str}{'…' if len(estructura_toc) > 6 else ''}")
+
+    return paginas_contenido, estructura_toc
 
 
 # ── Segmentación por secciones ────────────────────────────────────────────────

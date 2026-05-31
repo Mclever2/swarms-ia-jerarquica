@@ -45,6 +45,31 @@ _W_MEJORA     = 0.30
 
 # ── API pública ───────────────────────────────────────────────────────────────
 
+def calcular_metricas_preview(
+    contexto_original: str,
+    texto_mejorado: str,
+    puntaje_actual: int,
+    puntaje_max: int,
+) -> dict:
+    """
+    Calcula las métricas del ciclo en memoria sin guardar en disco.
+    Útil para mostrar en el frontend durante la revisión HITL.
+
+    Returns:
+        Dict con coherencia_semantica, indice_mejora, score_compuesto e interpretacion.
+    """
+    coherencia = _cosine_tfidf(contexto_original, texto_mejorado)
+    mejora     = _indice_mejora(0, puntaje_actual, puntaje_max)
+    score      = _W_COHERENCIA * coherencia + _W_MEJORA * mejora
+    return {
+        "coherencia_semantica": round(coherencia, 4),
+        "indice_mejora":        round(mejora, 4),
+        "score_compuesto":      round(score, 4),
+        "interpretacion":       _interpretar(score),
+        "pesos":                {"coherencia": _W_COHERENCIA, "mejora": _W_MEJORA},
+    }
+
+
 def calcular_y_guardar_coherencia(state: dict) -> str:
     """
     Calcula las 4 métricas de coherencia y las guarda en backend/logs/.

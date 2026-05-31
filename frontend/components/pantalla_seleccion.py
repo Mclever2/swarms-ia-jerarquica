@@ -1,23 +1,24 @@
 """
 Pantalla 2: Selección de sección a evaluar.
 
-Muestra las 7 secciones como tarjetas seleccionables. Al elegir una,
-despliega el panel de detalles con: ítems de la rúbrica con sus descripciones
-completas, preview del contenido detectado y dependencias cruzadas.
-El mentor confirma con "Iniciar Evaluación".
+Estilo langgraph:
+- Dropdown con las secciones reales del índice del PDF (si se detectó TOC)
+- Fallback a las secciones SECCIONES_TESIS del config si no hay TOC
+- Mapeo automático de nombre TOC → clave config para los agentes
+- Configuración avanzada de iteraciones
 """
 from __future__ import annotations
+import re
+
 import streamlit as st
 
-from backend.config import SECCIONES, RUBRICA_ITEMS_UPAO, CROSS_DEPS
+from backend.config import SECCIONES, SECCIONES_TESIS, SECCION_ITEMS_MAP, RUBRICA_ITEMS_UPAO
 from frontend import session_manager as sm
 
 
-def render():
-    st.title("Seleccionar Sección a Evaluar")
-
-    nombre = sm.get("pdf_nombre")
-    st.markdown(f"**Proyecto:** {nombre}")
+def render() -> None:
+    st.title("Sistema de Mentoría Académica Multiagente")
+    st.success(f"PDF cargado: **{sm.get('pdf_nombre')}**")
 
     rubrica = sm.get("rubrica_dinamica")
     if rubrica:
@@ -26,120 +27,165 @@ def render():
             f"({rubrica['total_items']} ítems)"
         )
     else:
-        st.caption("Rúbrica activa: UPAO oficial (33 ítems)")
+        st.caption("Rúbrica activa: UPAO oficial (33 ítems) — puedes subir tu propia rúbrica en el paso anterior.")
 
-    sections = sm.get("sections") or {}
-    st.markdown("Selecciona la sección del proyecto que deseas analizar:")
-    st.divider()
+    st.subheader("Paso 2 — Selecciona la sección a evaluar")
 
-    # ── Tarjetas de sección (2 columnas) ─────────────────────────────────────
-    seccion_preview = sm.get("seccion_preview")
-    seccion_keys    = list(SECCIONES.keys())
-    cols = st.columns(2)
+    # ── Construir opciones del dropdown ──────────────────────────────────────
+    estructura_toc = sm.get("estructura_toc") or {}
+    if estructura_toc:
+        secciones_ord = sorted(estructura_toc.items(), key=lambda x: x[1])
+        opciones      = [nombre for nombre, _ in secciones_ord]
+        usando_pdf    = True
+    else:
+        opciones   = [s["nombre"] for s in SECCIONES_TESIS]
+        usando_pdf = False
 
-    for i, sec_key in enumerate(seccion_keys):
-        info          = SECCIONES[sec_key]
-        texto         = sections.get(sec_key, "")
-        tiene_cont    = texto and not texto.startswith("[Sección")
-        chars         = len(texto) if tiene_cont else 0
-        n_items       = len(info["nums"])
-        seleccionada  = (sec_key == seccion_preview)
+    col_form, col_config = st.columns([2, 1])
 
-        with cols[i % 2]:
-            estado = "✅" if tiene_cont else "⚠️"
-            selmark = " ◀" if seleccionada else ""
-            label = (
-                f"{estado} **{info['label']}**{selmark}  \n"
-                f"Ítems {min(info['nums'])}–{max(info['nums'])} · {n_items} criterios"
-                + (f" · {chars:,} chars" if tiene_cont else " · no detectada")
+    with col_form:
+        seccion_elegida = st.selectbox(
+            "Sección del proyecto de tesis:",
+            options=opciones,
+            help=(
+                "Secciones extraídas del índice de tu PDF. "
+                "Al seleccionar una sección, el sistema recupera "
+                "automáticamente su contenido y subsecciones."
+            ) if usando_pdf else (
+                "Secciones estándar UPAO. El sistema buscará los fragmentos "
+                "relevantes del PDF para esta sección."
+            ),
+        )
+
+        # ── Info de rúbrica aplicable ─────────────────────────────────────
+        if rubrica:
+            secciones_rub = rubrica.get("secciones", {})
+            if secciones_rub:
+                st.caption(
+                    f"Rúbrica personalizada: **{rubrica['total_items']} ítems** en "
+                    f"{len(secciones_rub)} secciones · "
+                    f"puntaje máx: {rubrica['puntaje_maximo']} pts"
+                )
+        else:
+            clave_config = _mapear_a_clave_config(seccion_elegida) if usando_pdf else seccion_elegida
+            items = SECCION_ITEMS_MAP.get(clave_config or "", [])
+            if items:
+                info_sec = SECCIONES.get(clave_config, {})
+                label    = info_sec.get("label", clave_config)
+                st.caption(
+                    f"Ítems UPAO a evaluar ({label}): "
+                    f"**{', '.join(str(i) for i in items)}** "
+                    f"(máx. {len(items) * 3} pts)"
+                )
+            else:
+                st.caption(
+                    "Esta sección del PDF no tiene un mapeo directo a ítems UPAO — "
+                    "se evaluará con todos los criterios relevantes."
+                )
+
+        # ── Dependencias cruzadas ─────────────────────────────────────────
+        if not usando_pdf:
+            from backend.config import CROSS_DEPS
+            deps = CROSS_DEPS.get(seccion_elegida, [])
+            if deps:
+                deps_labels = [SECCIONES.get(d, {}).get("label", d) for d in deps]
+                st.caption(f"Contexto cruzado: {', '.join(deps_labels)}")
+        else:
+            st.caption(
+                "Contexto: subsecciones de la sección seleccionada + "
+                "secciones estructuralmente relacionadas del proyecto."
             )
-            tipo = "primary" if seleccionada else "secondary"
-            if st.button(
-                label,
-                key=f"btn_{sec_key}",
-                use_container_width=True,
-                type=tipo,
-                disabled=not tiene_cont,
-            ):
-                sm.set("seccion_preview", sec_key)
-                st.rerun()
 
-    # ── Panel de detalle (aparece al seleccionar) ─────────────────────────────
-    if seccion_preview and sections.get(seccion_preview):
-        st.divider()
-        _render_detalle(seccion_preview, sections, rubrica)
+    with col_config:
+        with st.expander("Configuración avanzada", expanded=False):
+            from backend.config import MAX_ITERACIONES
+            max_iter = st.slider(
+                "Iteraciones de mejora automática:",
+                min_value=1,
+                max_value=3,
+                value=min(MAX_ITERACIONES, 2),
+                help=(
+                    "Ciclos Director → Auditor ↔ Metodólogo. "
+                    "1 = una pasada rápida. "
+                    "2–3 = el Director itera varias veces para texto más refinado (más tiempo)."
+                ),
+            )
 
     st.divider()
-    if st.button("Volver / Cargar otro PDF"):
-        sm.set("seccion_preview", None)
+
+    # ── Tiempo estimado ───────────────────────────────────────────────────────
+    t_min = max(1, max_iter * 2)
+    t_max = max(2, max_iter * 5)
+    st.info(
+        f"{max_iter} iteración(es) · jerarquía Director→Auditor/Metodólogo · "
+        f"Tiempo estimado: {t_min}–{t_max} min · "
+        "Revisión final HITL (tú apruebas el texto)",
+        icon="ℹ️",
+    )
+
+    if st.button("Iniciar Evaluación", type="primary", use_container_width=True):
+        # Traducir nombre de sección del PDF a clave config si es posible
+        if usando_pdf:
+            clave_activa = _mapear_a_clave_config(seccion_elegida) or seccion_elegida
+        else:
+            clave_activa = seccion_elegida
+
+        sm.set("seccion_activa",  clave_activa)
+        sm.set("seccion_nombre_toc", seccion_elegida)   # nombre original del TOC para mostrar
+        sm.set("iteracion_hitl",  0)
+        sm.set("resultado",       None)
+        sm.set("max_iter_override", max_iter)
+        sm.ir_a("procesando")
+
+    st.divider()
+    if st.button("← Volver / Cargar otro PDF", type="secondary"):
         sm.ir_a("upload")
 
 
-# ── Panel de detalle ──────────────────────────────────────────────────────────
+# ── Mapeo TOC → clave de config ───────────────────────────────────────────────
 
-def _render_detalle(sec_key: str, sections: dict, rubrica) -> None:
-    info    = SECCIONES[sec_key]
-    texto   = sections.get(sec_key, "")
-    deps    = CROSS_DEPS.get(sec_key, [])
+# Palabras clave por clave de config. Orden importa: más específico primero.
+_KW_MAP: list[tuple[str, list[str]]] = [
+    ("referencias",              ["referencia", "bibliograf"]),
+    ("aspectos_administrativos", ["administrat", "cronograma", "presupuesto", "recursos", "financiamiento"]),
+    ("marco_metodologico",       ["metodológ", "metodolog", "tipo", "diseño", "diseño", "población",
+                                   "muestra", "instrumento", "procedimiento", "análisis de dato"]),
+    ("hipotesis_variables",      ["hipótes", "hipotes", "variable", "operacional", "matriz de consistencia",
+                                   "consistencia"]),
+    ("marco_teorico",            ["marco teóric", "marco teoric", "teóric", "teoric",
+                                   "antecedente", "base teóric", "término", "termin", "citación"]),
+    ("planteamiento_problema",   ["planteamiento", "problema", "formulación", "formulacion",
+                                   "objetivo", "justificaci", "importancia", "descripción", "descripcion",
+                                   "delimitación", "delimitacion"]),
+    ("titulo",                   ["título", "titulo", "información general", "informacion general"]),
+]
 
-    st.subheader(f"Sección seleccionada: {info['label']}")
 
-    col_items, col_preview = st.columns([1, 1])
+def _mapear_a_clave_config(nombre_toc: str) -> str | None:
+    """
+    Intenta mapear un nombre de sección del TOC del PDF a una clave de SECCIONES del config.
+    Estrategia: primero prefijo numérico, luego palabras clave.
+    Retorna None si no hay coincidencia.
+    """
+    nombre_lower = nombre_toc.lower()
 
-    with col_items:
-        st.markdown("**Ítems de la rúbrica a evaluar:**")
-        if rubrica:
-            # Rúbrica dinámica: mostrar ítems de la rúbrica cargada
-            secciones_rub = rubrica.get("secciones", {})
-            items_rub     = rubrica.get("items", [])
-            # Intentar agrupar por sección de la rúbrica dinámica
-            for sec_nombre, nums in secciones_rub.items():
-                st.markdown(f"*{sec_nombre}*")
-                for item in items_rub:
-                    if item["numero"] in nums:
-                        st.markdown(
-                            f"- **{item['numero']:02d}.** {item['descripcion']}"
-                        )
-        else:
-            # Rúbrica UPAO: mostrar ítems de la sección
-            for n in info["nums"]:
-                desc = RUBRICA_ITEMS_UPAO.get(n, "")
-                st.markdown(f"- **{n:02d}.** {desc}")
+    # 1. Prefijo numérico (solo si el PDF usa numeración arábiga estándar UPAO)
+    m = re.match(r'^(\d+)[\.\s]', nombre_toc.strip())
+    if m:
+        cap = int(m.group(1))
+        _PREFIX_MAP = {
+            1: "planteamiento_problema",
+            2: "marco_teorico",
+            3: "hipotesis_variables",
+            4: "marco_metodologico",
+            5: "aspectos_administrativos",
+        }
+        if cap in _PREFIX_MAP:
+            return _PREFIX_MAP[cap]
 
-        pts_max = rubrica.get("puntaje_maximo", 0) if rubrica else len(info["nums"]) * 3
-        st.caption(f"Puntaje máximo de sección: {pts_max} pts")
+    # 2. Palabras clave
+    for clave, keywords in _KW_MAP:
+        if any(kw in nombre_lower for kw in keywords):
+            return clave
 
-        if deps:
-            st.markdown("**Secciones consultadas como contexto cruzado:**")
-            for dep in deps:
-                dep_label = SECCIONES.get(dep, {}).get("label", dep)
-                dep_ok    = sections.get(dep, "").startswith("[Sección") is False
-                icon      = "✅" if dep_ok else "⚠️"
-                st.markdown(f"- {icon} {dep_label}")
-
-    with col_preview:
-        st.markdown("**Contenido detectado en el PDF:**")
-        preview = texto[:800].strip() if texto else ""
-        if preview:
-            st.text_area(
-                label="preview",
-                value=preview + ("…" if len(texto) > 800 else ""),
-                height=280,
-                disabled=True,
-                label_visibility="collapsed",
-            )
-        else:
-            st.warning("No se detectó contenido para esta sección en el PDF.")
-
-    st.markdown(" ")
-    if st.button(
-        f"Iniciar Evaluación — {info['label']}",
-        type="primary",
-        use_container_width=True,
-        key="btn_iniciar",
-    ):
-        sm.set("seccion_activa",  sec_key)
-        sm.set("seccion_preview", None)
-        sm.set("iteracion_hitl",  0)
-        sm.set("resultado",       None)
-        sm.ir_a("procesando")
+    return None

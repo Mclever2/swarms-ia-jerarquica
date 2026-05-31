@@ -78,7 +78,8 @@ def evaluar_seccion(
         items = items_de_seccion(seccion_key)
         items_str = "\n".join(f"- Ítem {it['n']:02d}: {it['desc']}" for it in items)
         puntaje_max = len(items) * 3
-        logger.info(f"[Auditor] Usando rúbrica UPAO: {len(items)} ítems")
+        n_items = len(items)
+        logger.info(f"[Auditor] Usando rúbrica UPAO: {n_items} ítems")
 
     regla_placeholder = (
         "\nREGLA: Si el texto contiene '[COMPLETAR: ...]', evalúa ese ítem con puntaje 0 o 1.\n"
@@ -93,7 +94,7 @@ def evaluar_seccion(
         + "Responde ÚNICAMENTE con el objeto JSON."
     )
 
-    logger.info(f"[Auditor] Evaluando '{seccion_key}' — {len(items)} ítems")
+    logger.info(f"[Auditor] Evaluando '{seccion_key}' — {n_items} ítems")
     time.sleep(SLEEP_BETWEEN_AGENTS)
 
     def _call():

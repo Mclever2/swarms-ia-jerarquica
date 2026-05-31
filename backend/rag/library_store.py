@@ -7,7 +7,6 @@ Responsabilidad única: gestionar los libros de referencia teórica.
 
 import os
 import logging
-import re
 from typing import List
 
 import chromadb
@@ -16,24 +15,14 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from backend.config import LIBRARY_CHROMA_PATH, BOOKS_PRELOAD_DIR, SECCIONES_TESIS
-from .extractor import extraer_texto_pdf
+from .extractor import extraer_contenido_sin_indice
 
 logger = logging.getLogger(__name__)
 
-_COLLECTION_NAME = "biblioteca_metodologia_e5"  # sufijo _e5: evita mezcla con vectores del modelo anterior
+_COLLECTION_NAME = "biblioteca_metodologia_e5"
 _CHUNK_LIBRO     = 800
 _OVERLAP_LIBRO   = 100
 _K_LIBROS        = 3
-
-# Detecta chunks que son principalmente índice/TOC de libros
-_RE_LINEA_INDICE = re.compile(r'\.{4,}\s*\d{1,4}\s*$')
-
-def _es_chunk_indice(texto: str) -> bool:
-    lineas = [l for l in texto.split('\n') if l.strip()]
-    if not lineas:
-        return False
-    matches = sum(1 for l in lineas if _RE_LINEA_INDICE.search(l.strip()))
-    return matches / len(lineas) >= 0.35
 
 
 # ── Carga / creación ──────────────────────────────────────────────────────────
@@ -70,8 +59,8 @@ def agregar_libro(
     Returns:
         Número de fragmentos indexados.
     """
-    texto = extraer_texto_pdf(pdf_bytes)
-    if not texto.strip():
+    paginas_contenido, _ = extraer_contenido_sin_indice(pdf_bytes)
+    if not paginas_contenido:
         raise ValueError(f"El PDF '{nombre_libro}' está vacío o no tiene texto seleccionable.")
 
     splitter = RecursiveCharacterTextSplitter(
@@ -79,18 +68,33 @@ def agregar_libro(
         chunk_overlap=_OVERLAP_LIBRO,
         separators=["\n\n", "\n", ". ", "   ", " ", ""],
     )
-    docs = splitter.create_documents(
-        [texto],
-        metadatas=[{"fuente": nombre_libro, "tipo": "libro_metodologia"}],
-    )
-    antes = len(docs)
-    docs = [d for d in docs if not _es_chunk_indice(d.page_content)]
-    logger.info(
-        f"Libro '{nombre_libro}': {antes} fragmentos → {len(docs)} útiles "
-        f"({antes - len(docs)} chunks de índice/TOC filtrados)"
-    )
+    textos    = [texto for _, texto in paginas_contenido]
+    metadatas = [{"fuente": nombre_libro, "tipo": "libro_metodologia"} for _ in paginas_contenido]
+    docs = splitter.create_documents(textos, metadatas=metadatas)
     vs_libros.add_documents(docs)
+    logger.info(f"Libro '{nombre_libro}' indexado: {len(docs)} fragmentos")
     return len(docs)
+
+
+def listar_libros_ligero() -> list:
+    """
+    Lista los libros sin necesitar el modelo de embeddings.
+    Usa chromadb directamente — seguro de llamar al inicio de la app.
+    """
+    try:
+        os.makedirs(LIBRARY_CHROMA_PATH, exist_ok=True)
+        cliente = chromadb.PersistentClient(path=LIBRARY_CHROMA_PATH)
+        col = cliente.get_or_create_collection(_COLLECTION_NAME)
+        resultado = col.get(include=["metadatas"])
+        conteo: dict = {}
+        for meta in (resultado.get("metadatas") or []):
+            if meta and "fuente" in meta:
+                nombre = meta["fuente"]
+                conteo[nombre] = conteo.get(nombre, 0) + 1
+        return [{"nombre": k, "fragmentos": v} for k, v in sorted(conteo.items())]
+    except Exception as exc:
+        logger.warning(f"Error listando libros (ligero): {exc}")
+        return []
 
 
 def listar_libros(vs_libros: Chroma) -> List[dict]:

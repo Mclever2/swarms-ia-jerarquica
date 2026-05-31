@@ -61,8 +61,21 @@ def analizar_coherencia(
     def _call():
         with use_groq_key(_API_KEY):
             result = run_agent_silently(agent, task)
+        # swarms puede devolver el prompt original al final del output;
+        # lo truncamos para quedar solo con el análisis del agente.
+        for marcador in [
+            "CONTEXTO PRINCIPAL:",
+            "CONTEXTO CRUZADO",
+            "Analiza el rigor científico",
+            "Identifica inconsistencias",
+        ]:
+            idx = result.find(marcador)
+            if 0 < idx < len(result) - 50:
+                result = result[:idx]
+                break
+        result = result.strip()
         logger.info(f"[Metodólogo] OK — {len(result)} chars")
-        return result.strip()
+        return result
 
     try:
         return call_with_backoff(_call)

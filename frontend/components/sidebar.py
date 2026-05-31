@@ -6,7 +6,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from backend.rag.library_store import agregar_libro, listar_libros
+from backend.rag.library_store import agregar_libro, listar_libros_ligero
 from frontend.resources import get_library, check_api_key
 from frontend import session_manager as sm
 
@@ -29,8 +29,7 @@ def render():
 
         # ── Biblioteca metodológica ───────────────────────────────────────
         st.subheader("📚 Biblioteca Metodológica")
-        library = get_library()
-        libros_raw = listar_libros(library)
+        libros_raw = listar_libros_ligero()
         libros = [l["nombre"] for l in libros_raw]
 
         if libros_raw:
@@ -46,6 +45,7 @@ def render():
         if uploaded_book:
             nombre = uploaded_book.name.replace(".pdf", "")
             with st.spinner(f"Indexando '{nombre}'..."):
+                library = get_library()  # carga modelo solo cuando se necesita
                 n = agregar_libro(library, uploaded_book.getvalue(), nombre)
             st.success(f"✅ {n} fragmentos indexados")
             st.rerun()
@@ -56,6 +56,7 @@ def render():
         pendientes = [p for p in pdfs_preload if p.stem not in indexados]
         if pendientes:
             if st.button(f"Indexar {len(pendientes)} libro(s) de /books"):
+                library = get_library()  # carga modelo solo cuando se necesita
                 for p in pendientes:
                     agregar_libro(library, p.read_bytes(), p.stem)
                 st.success("Indexación completada")
