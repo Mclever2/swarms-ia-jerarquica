@@ -56,9 +56,16 @@ def render():
         pendientes = [p for p in pdfs_preload if p.stem not in indexados]
         if pendientes:
             if st.button(f"Indexar {len(pendientes)} libro(s) de /books"):
-                library = get_library()  # carga modelo solo cuando se necesita
-                for p in pendientes:
-                    agregar_libro(library, p.read_bytes(), p.stem)
+                library = get_library()
+                progress = st.progress(0, text="Iniciando indexación...")
+                for i, p in enumerate(pendientes):
+                    progress.progress(i / len(pendientes), text=f"Indexando: {p.stem}…")
+                    try:
+                        n = agregar_libro(library, p.read_bytes(), p.stem)
+                        st.toast(f"✅ {p.stem}: {n} fragmentos")
+                    except Exception as exc:
+                        st.warning(f"⚠️ {p.stem}: {exc}")
+                progress.progress(1.0, text="Completado")
                 st.success("Indexación completada")
                 st.rerun()
 

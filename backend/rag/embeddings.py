@@ -34,15 +34,21 @@ class MultilingualE5Embeddings(Embeddings):
         self.model = AutoModel.from_pretrained(model_name, use_safetensors=False)
         self.model.eval()
 
+    BATCH_SIZE = 4
+
     def _encode(self, texts: list) -> list:
-        batch = self.tokenizer(
-            texts, max_length=512, padding=True, truncation=True, return_tensors="pt"
-        )
-        with torch.no_grad():
-            outputs = self.model(**batch)
-        embeddings = _mean_pool(outputs.last_hidden_state, batch["attention_mask"])
-        embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
-        return embeddings.tolist()
+        all_embeddings = []
+        for i in range(0, len(texts), self.BATCH_SIZE):
+            chunk = texts[i : i + self.BATCH_SIZE]
+            batch = self.tokenizer(
+                chunk, max_length=512, padding=True, truncation=True, return_tensors="pt"
+            )
+            with torch.no_grad():
+                outputs = self.model(**batch)
+            embeddings = _mean_pool(outputs.last_hidden_state, batch["attention_mask"])
+            embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
+            all_embeddings.extend(embeddings.tolist())
+        return all_embeddings
 
     def embed_documents(self, texts: list) -> list:
         return self._encode([f"passage: {t}" for t in texts])

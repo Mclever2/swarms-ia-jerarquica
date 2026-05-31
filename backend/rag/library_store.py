@@ -5,6 +5,7 @@ Ciclo de vida: persiste en disco entre sesiones y reinicios del servidor.
 Responsabilidad única: gestionar los libros de referencia teórica.
 """
 
+import gc
 import os
 import logging
 from typing import List
@@ -71,7 +72,12 @@ def agregar_libro(
     textos    = [texto for _, texto in paginas_contenido]
     metadatas = [{"fuente": nombre_libro, "tipo": "libro_metodologia"} for _ in paginas_contenido]
     docs = splitter.create_documents(textos, metadatas=metadatas)
-    vs_libros.add_documents(docs)
+
+    _BATCH_DOCS = 40
+    for i in range(0, len(docs), _BATCH_DOCS):
+        vs_libros.add_documents(docs[i : i + _BATCH_DOCS])
+        gc.collect()
+
     logger.info(f"Libro '{nombre_libro}' indexado: {len(docs)} fragmentos")
     return len(docs)
 

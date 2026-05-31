@@ -325,16 +325,11 @@ def _render_tab_metricas(
     puntaje_max: int,
 ) -> None:
     """
-    Muestra las métricas de calidad del ciclo multiagente.
+    Métricas NLP idénticas al proyecto LangGraph:
+      Fila 1 — ROUGE-1, ROUGE-2, ROUGE-L, BLEU
+      Fila 2 — Cos sim, Gain Score, Kappa, Puntaje 0-10
 
-    Métricas aplicables a swarms (igual que LangGraph):
-    - Coherencia Semántica: TF-IDF Cosine Similarity (Salton et al., 1975)
-    - Índice de Mejora: Normalized Gain Score
-    - Score Compuesto: 70% coherencia + 30% mejora
-
-    Métricas referenciales (LangGraph con debate formal — no aplican aquí):
-    - Acuerdo Multiagente: siempre 1.0 (sin debate)
-    - ROUGE-L Calidad Argumentativa: N/A (sin debate)
+    Más la sección de actividad del enjambre (única de swarms).
     """
     import re as _re
 
@@ -343,45 +338,53 @@ def _render_tab_metricas(
     log_debate     = resultado.get("log_debate", "")
     iteracion_hitl = sm.get("iteracion_hitl") or 0
 
-    # ── Métricas del ciclo — tabla idéntica a LangGraph ──────────────────────
-    st.subheader("Métricas del Ciclo")
-
-    coherencia     = 0.0
-    mejora         = 0.0
-    score          = 0.0
-    argumentativa  = 0.5   # neutral — sin debate formal en swarms
-    acuerdo        = 1.0   # consistencia perfecta — sin debate formal en swarms
-    interpretacion = "Sin datos suficientes"
+    # ── Calcular métricas NLP ─────────────────────────────────────────────────
+    metricas: dict = {}
     try:
-        from backend.metrics.coherencia import calcular_metricas_preview
-        m = calcular_metricas_preview(
-            contexto_original=ctx_original,
-            texto_mejorado=texto_mejorado,
-            puntaje_actual=puntaje_bruto,
-            puntaje_max=puntaje_max,
+        from backend.metrics.nlp_metrics import calcular_todas
+        metricas = calcular_todas(
+            texto_referencia=ctx_original,
+            texto_generado=texto_mejorado,
+            puntaje_inicial=0,
+            puntaje_final=float(puntaje_bruto),
+            puntaje_maximo=float(puntaje_max),
+            historial_texto=[],   # swarms no tiene turnos de debate como texto
         )
-        coherencia     = m["coherencia_semantica"]
-        mejora         = m["indice_mejora"]
-        score          = m["score_compuesto"]
-        interpretacion = m["interpretacion"]
-    except Exception:
-        pass
+    except Exception as _exc:
+        import logging
+        logging.getLogger("mentoria").warning(f"[NLP] Error calculando métricas: {_exc}")
 
-    st.markdown(
-        f"| Métrica | Dimensión | Valor |\n"
-        f"|---|---|---|\n"
-        f"| TF-IDF (Coherencia Semántica) | ¿El agente preservó el trabajo del estudiante? | {coherencia:.4f} |\n"
-        f"| ROUGE-L (Cobertura argumentativa) | ¿El agente respondió a las críticas recibidas? | {argumentativa:.4f} |\n"
-        f"| Kappa proxy (Acuerdo multiagente) | ¿El Auditor es consistente? | {acuerdo:.4f} |\n"
-        f"| Normalized Gain (Efectividad del ciclo) | ¿El proceso realmente mejoró el texto? | {mejora:.4f} |\n"
-        f"| **Score compuesto** | (70% coherencia + 30% mejora) | **{score:.4f}** |"
+    # ── Mostrar: Métricas NLP ─────────────────────────────────────────────────
+    st.markdown("#### Métricas NLP")
+    st.caption(
+        "Comparan el *texto original* analizado vs el *texto sugerido* "
+        "(reescritura propuesta por el pipeline)."
     )
-    st.caption(f"*Interpretación: {interpretacion}*")
+
+    # Fila 1 — ROUGE-1, ROUGE-2, ROUGE-L, BLEU
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("ROUGE-1", f"{metricas.get('rouge1_f', 0.0):.3f}")
+    col2.metric("ROUGE-2", f"{metricas.get('rouge2_f', 0.0):.3f}")
+    col3.metric("ROUGE-L", f"{metricas.get('rougeL_f', 0.0):.3f}")
+    col4.metric("BLEU",    f"{metricas.get('bleu_score', 0.0):.3f}")
+
+    # Fila 2 — Cos sim, Gain Score, Kappa, Puntaje 0-10
+    col5, col6, col7, col8 = st.columns(4)
+    col5.metric("Cos sim",       f"{metricas.get('similitud_coseno', 0.0):.3f}")
+    g = metricas.get("gain_score")
+    col6.metric("Gain Score",    f"{g:.3f}" if g is not None else "—")
+    k = metricas.get("kappa")
+    col7.metric("Kappa",         f"{k:.3f}" if k is not None else "—")
+    col8.metric("Puntaje 0-10",  f"{metricas.get('puntaje_10', 0.0):.1f}")
+
+    st.caption(
+        "*Kappa: requiere ≥2 iteraciones. Usa el botón Rechazar para re-analizar y activarlo.*"
+    )
 
     st.divider()
 
     # ── Actividad del enjambre ────────────────────────────────────────────────
-    st.subheader("Actividad del Enjambre Jerárquico")
+    st.markdown("#### Actividad del Enjambre Jerárquico")
 
     auditor_calls = metodologico_calls = redactor_calls = "—"
     if log_debate:
@@ -393,73 +396,32 @@ def _render_tab_metricas(
         if m_r: redactor_calls     = m_r.group(1)
 
     ca, cm, cr, ch = st.columns(4)
-    ca.metric(
-        "Auditor",
-        f"{auditor_calls}×",
-        help="Llamadas del Director al Agente Auditor de rúbrica UPAO.",
-    )
-    cm.metric(
-        "Metodólogo",
-        f"{metodologico_calls}×",
-        help="Llamadas del Director al Agente Metodólogo de coherencia científica.",
-    )
-    cr.metric(
-        "Redactor",
-        f"{redactor_calls}×",
-        help="Llamadas del Director al Agente Redactor para generar texto mejorado.",
-    )
-    ch.metric(
-        "Re-análisis HITL",
-        f"{iteracion_hitl}×",
-        help="Veces que el Mentor rechazó el resultado y solicitó un nuevo análisis completo.",
-    )
-
-    st.divider()
-
-    # ── Métricas referenciales ────────────────────────────────────────────────
-    st.subheader("Métricas Referenciales")
-    st.caption(
-        "En arquitecturas con **debate formal** entre agentes (como LangGraph) existen dos métricas adicionales: "
-        "Acuerdo Multiagente y ROUGE-L. En este sistema swarms, el Director coordina mediante "
-        "tool-calling directo sin rondas de debate explícitas, por lo que se muestran como referencia."
-    )
-
-    col_a, col_b = st.columns(2)
-    with col_a:
-        with st.container(border=True):
-            st.markdown("**Acuerdo Multiagente**")
-            st.caption("Percentage Agreement — proxy de Cohen's Kappa (Cohen, 1960)")
-            st.markdown(
-                "Mide la consistencia del panel evaluador entre rondas de debate. "
-                "En swarms sin debate formal, el Auditor solo emite un único veredicto → consistencia perfecta."
-            )
-            st.metric("Valor", "1.00", help="Sin debate → consistencia perfecta asumida (valor máximo = 1.0).")
-
-    with col_b:
-        with st.container(border=True):
-            st.markdown("**Calidad Argumentativa (ROUGE-L)**")
-            st.caption("ROUGE-L (Lin, 2004)")
-            st.markdown(
-                "Mide qué tan bien responde el Redactor al feedback del Auditor en cada ronda de debate. "
-                "No aplica en swarms porque el Director sintetiza internamente sin rondas formales."
-            )
-            st.metric("Valor", "N/A", help="No aplica — no hay rondas de debate en arquitectura swarms.")
+    ca.metric("Auditor",       f"{auditor_calls}×",
+              help="Llamadas del Director al Agente Auditor de rúbrica UPAO.")
+    cm.metric("Metodólogo",    f"{metodologico_calls}×",
+              help="Llamadas del Director al Agente Metodólogo de coherencia científica.")
+    cr.metric("Redactor",      f"{redactor_calls}×",
+              help="Llamadas del Director al Agente Redactor para generar texto mejorado.")
+    ch.metric("Re-análisis",   f"{iteracion_hitl}×",
+              help="Veces que el Mentor rechazó el resultado y solicitó un nuevo análisis.")
 
     st.divider()
 
     # ── Datos crudos ──────────────────────────────────────────────────────────
     with st.expander("Ver datos crudos del ciclo"):
         st.json({
-            "seccion":             seccion_key,
-            "puntaje_bruto":       puntaje_bruto,
-            "puntaje_max":         puntaje_max,
-            "porcentaje_rubrica":  f"{round(puntaje_bruto / puntaje_max * 100) if puntaje_max else 0}%",
-            "coherencia_semantica":coherencia,
-            "indice_mejora":       mejora,
-            "score_compuesto":     score,
-            "interpretacion":      interpretacion,
-            "pesos":               {"coherencia": 0.70, "mejora": 0.30},
-            "iteraciones_hitl":    iteracion_hitl,
+            "seccion":          seccion_key,
+            "puntaje_bruto":    puntaje_bruto,
+            "puntaje_max":      puntaje_max,
+            "rouge1_f":         metricas.get("rouge1_f", 0.0),
+            "rouge2_f":         metricas.get("rouge2_f", 0.0),
+            "rougeL_f":         metricas.get("rougeL_f", 0.0),
+            "bleu_score":       metricas.get("bleu_score", 0.0),
+            "similitud_coseno": metricas.get("similitud_coseno", 0.0),
+            "gain_score":       metricas.get("gain_score"),
+            "kappa":            metricas.get("kappa"),
+            "puntaje_10":       metricas.get("puntaje_10", 0.0),
+            "iteraciones_hitl": iteracion_hitl,
             "llamadas_agentes": {
                 "auditor":      auditor_calls,
                 "metodologico": metodologico_calls,
