@@ -76,6 +76,9 @@ def crear_herramientas(
         """
         Convoca al Auditor para evaluar los ítems de la rúbrica para la sección actual.
         """
+        if state.get("reporte"):
+            logger.info("[Tool] Auditor ya evaluado — devolviendo resultado en caché.")
+            return "AUDITOR YA EVALUADO. Usa el reporte previo y avanza al Paso 3 (convocar_consenso)."
         if progress_cb:
             progress_cb(None, "[Jerarquía] Director → Auditor: evaluando rúbrica...")
         logger.info(f"[Tool] Director delegó a Auditor | sección='{seccion_key}'")
@@ -113,6 +116,9 @@ def crear_herramientas(
         """
         Convoca al Metodólogo para analizar el rigor científico y coherencia cruzada.
         """
+        if state.get("obs_metod"):
+            logger.info("[Tool] Metodólogo ya evaluado — devolviendo resultado en caché.")
+            return "METODÓLOGO YA EVALUADO. Usa las observaciones previas y avanza al Paso 4 (convocar_disenso)."
         if progress_cb:
             progress_cb(None, "[Jerarquía] Director → Metodólogo: analizando coherencia...")
         logger.info(f"[Tool] Director delegó a Metodólogo | sección='{seccion_key}'")
@@ -250,12 +256,8 @@ def crear_herramientas(
         if not feedback_aud and not obs_metod:
             return "CONSENSO: No hay reportes disponibles. Convoca al Auditor y al Metodólogo primero."
 
-        from langchain_openai import ChatOpenAI
-        llm = ChatOpenAI(
-            api_key=os.getenv("OPENAI_API_KEY"),
-            model="gpt-4o-mini",
-            temperature=0.2,
-        )
+        from openai import OpenAI
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", "").strip())
 
         prompt = (
             f"Eres un analista de coherencia académica. Identifica los PUNTOS DE ACUERDO "
@@ -271,7 +273,11 @@ def crear_herramientas(
         )
 
         time.sleep(SLEEP_BETWEEN_AGENTS)
-        resultado = llm.invoke(prompt).content
+        resultado = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+        ).choices[0].message.content
         state["resultado_consenso"] = resultado
         state["iteraciones_consenso"] = state.get("iteraciones_consenso", 0) + 1
 
@@ -297,12 +303,8 @@ def crear_herramientas(
         if not feedback_aud and not obs_metod:
             return "DISENSO: No hay reportes disponibles. Convoca al Auditor y al Metodólogo primero."
 
-        from langchain_openai import ChatOpenAI
-        llm = ChatOpenAI(
-            api_key=os.getenv("OPENAI_API_KEY"),
-            model="gpt-4o-mini",
-            temperature=0.2,
-        )
+        from openai import OpenAI
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", "").strip())
 
         prompt = (
             f"Eres un árbitro académico. Identifica los CONFLICTOS entre el Auditor "
@@ -318,7 +320,11 @@ def crear_herramientas(
         )
 
         time.sleep(SLEEP_BETWEEN_AGENTS)
-        resultado = llm.invoke(prompt).content
+        resultado = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+        ).choices[0].message.content
         state["resultado_disenso"] = resultado
         state["iteraciones_disenso"] = state.get("iteraciones_disenso", 0) + 1
 
