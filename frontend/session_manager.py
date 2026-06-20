@@ -69,3 +69,16 @@ def reiniciar_solo_grafo() -> None:
     set("seccion_preview",     None)
     set("pantalla",            "seleccion")
     st.rerun()
+
+
+def badge_puntaje(puntaje: int, puntaje_max: int) -> str:
+    """Devuelve un emoji + texto para mostrar el puntaje con semáforo de color."""
+    if puntaje_max == 0:
+        return "—"
+    pct = puntaje / puntaje_max
+    if pct >= 0.8:
+        return f"🟢 {puntaje}/{puntaje_max}"
+    elif pct >= 0.5:
+        return f"🟡 {puntaje}/{puntaje_max}"
+    else:
+        return f"🔴 {puntaje}/{puntaje_max}"

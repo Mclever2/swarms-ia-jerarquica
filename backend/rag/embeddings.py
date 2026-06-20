@@ -31,7 +31,7 @@ class MultilingualE5Embeddings(Embeddings):
 
     def __init__(self, model_name: str = MODELO_EMBEDDING):
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModel.from_pretrained(model_name, use_safetensors=False)
+        self.model = AutoModel.from_pretrained(model_name)
         self.model.eval()
 
     BATCH_SIZE = 4

@@ -15,7 +15,7 @@ from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from backend.config import SECCIONES_TESIS, CROSS_DEPS, CROSS_QUERIES, SECTION_QUERIES
+from backend.config import SECCIONES_TESIS, CROSS_DEPS
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,7 @@ CHUNK_SIZE    = 600
 CHUNK_OVERLAP = 80
 K_RESULTADOS  = 4
 K_INICIAL     = 6
-MAX_FRAGMENTOS_SECCION = 20
+MAX_FRAGMENTOS_SECCION = 50
 
 _MIN_CHARS_CHUNK = 80
 
@@ -292,6 +292,9 @@ def construir_vector_store(
         )
         logger.info(f"Chunking fijo (sin TOC): {len(documentos)} fragmentos")
 
+    for idx, doc in enumerate(documentos):
+        doc.metadata["chunk_index"] = idx
+
     cliente = chromadb.EphemeralClient()
     store = Chroma(
         client=cliente,
@@ -332,6 +335,7 @@ def recuperar_contexto(
 
     if not top_meta:
         docs = todos_docs[:k]
+        docs.sort(key=lambda d: d.metadata.get("chunk_index", 0))
         logger.info(f"RAG tesis: {len(docs)} fragmentos (sin metadata de sección)")
     else:
         config_prefijos = _extraer_prefijos_rango(seccion)
@@ -347,6 +351,7 @@ def recuperar_contexto(
             docs = [d for d in todos_docs
                     if any(_es_subseccion(d.metadata.get("seccion", ""), cp)
                            for cp in config_prefijos)]
+            docs.sort(key=lambda d: d.metadata.get("chunk_index", 0))
             docs = docs[:MAX_FRAGMENTOS_SECCION]
             logger.info(f"RAG tesis: prefijos config {config_prefijos} → {len(docs)} fragmentos")
         else:
@@ -354,6 +359,7 @@ def recuperar_contexto(
             if ancestor:
                 docs = [d for d in todos_docs
                         if _es_subseccion(d.metadata.get("seccion", ""), ancestor)]
+                docs.sort(key=lambda d: d.metadata.get("chunk_index", 0))
                 docs = docs[:MAX_FRAGMENTOS_SECCION]
                 logger.info(f"RAG tesis: ancestro semántico '{ancestor}' → {len(docs)} fragmentos")
             else:
@@ -365,6 +371,7 @@ def recuperar_contexto(
                 else:
                     docs = [d for d in todos_docs
                             if d.metadata.get("seccion") == seccion_dominante]
+                docs.sort(key=lambda d: d.metadata.get("chunk_index", 0))
                 docs = docs[:MAX_FRAGMENTOS_SECCION]
                 logger.info(f"RAG tesis: dominante '{seccion_dominante}' → {len(docs)} fragmentos")
 
@@ -499,21 +506,29 @@ def query_cross_context(
     seccion_key: str,
     k_por_dep: int = 2,
 ) -> str:
-    deps = CROSS_DEPS.get(seccion_key, [])
+    from backend.config import _mapear_a_clave_config
+    clave_config = _mapear_a_clave_config(seccion_key) or seccion_key
+    deps = CROSS_DEPS.get(clave_config, [])
     if not deps:
         return ""
 
     partes = []
     for dep in deps:
-        cross_query = CROSS_QUERIES.get((seccion_key, dep)) or SECTION_QUERIES.get(dep, dep)
+        cross_query = dep
+        for sec in SECCIONES_TESIS:
+            if sec["nombre"] == dep:
+                cross_query = sec["query"]
+                break
         try:
             docs = vector_store.similarity_search(cross_query, k=k_por_dep)
             if docs:
+                docs.sort(key=lambda d: d.metadata.get("chunk_index", 0))
                 textos = "\n---\n".join(d.page_content for d in docs)
                 partes.append(f"[Contexto de '{dep}']\n{textos}")
         except Exception as exc:
             logger.warning(f"query_cross_context: error en dep '{dep}': {exc}")
 
     resultado = "\n\n".join(partes)
-    logger.info(f"Contexto cruzado para '{seccion_key}': {len(partes)} secciones, {len(resultado)} chars")
+    logger.info(f"Contexto cruzado para '{seccion_key}' (clave config: '{clave_config}'): {len(partes)} secciones, {len(resultado)} chars")
     return resultado
+

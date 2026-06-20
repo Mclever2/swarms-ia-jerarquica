@@ -1,0 +1,22 @@
+venv/
+.env
+.git/
+agent_workspace/
+outputs/
+chroma_db/
+*.log
+
+# Python bytecode
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+**/*.pyc
+
+# Claude Code internal
+.claude/
+
+# Windows artifacts
+Thumbs.db
+desktop.ini

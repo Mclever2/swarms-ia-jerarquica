@@ -1,0 +1,80 @@
+{
+  "run_id": "test_run_mock_eval",
+  "arquitectura": null,
+  "universidad": "upao",
+  "metricas": {
+    "llm_judge_score": 5.0,
+    "llm_judge_max": 8.0,
+    "llm_judge_pct": 0.625,
+    "llm_judge_secciones": [
+      "4. Objetivos de la investigación"
+    ],
+    "llm_judge_items": [
+      {
+        "item_id": "4.1",
+        "descripcion": "El objetivo general inicia con un verbo en infinitivo de acción observable (determinar, evaluar, comparar, establecer, identificar).",
+        "pts_max": 1.0,
+        "pts_obtenido": 1.0,
+        "razon": "El objetivo general inicia con el verbo 'Determinar', que es un verbo en infinitivo de acción observable."
+      },
+      {
+        "item_id": "4.2",
+        "descripcion": "El objetivo general es congruente con la pregunta central del estudio y abarca su totalidad.",
+        "pts_max": 1.5,
+        "pts_obtenido": 0.75,
+        "razon": "El objetivo general es congruente con la pregunta central del estudio, pero no se proporciona suficiente información para confirmar que abarca su totalidad."
+      },
+      {
+        "item_id": "4.3",
+        "descripcion": "Los objetivos específicos son derivaciones lógicas del objetivo general que, sumados, lo cubren completamente.",
+        "pts_max": 1.5,
+        "pts_obtenido": 0.75,
+        "razon": "No se proporcionan objetivos específicos en el texto evaluado, por lo que se asume que podrían derivarse lógicamente del objetivo general, pero no se puede confirmar completamente."
+      },
+      {
+        "item_id": "4.4",
+        "descripcion": "Cada objetivo específico es independiente (no se superponen entre sí) y aborda un aspecto distinto del problema.",
+        "pts_max": 1.0,
+        "pts_obtenido": 0.5,
+        "razon": "No se especifican objetivos específicos, por lo que se asume que podrían ser independientes, pero no se puede confirmar."
+      },
+      {
+        "item_id": "4.5",
+        "descripcion": "Los objetivos son alcanzables con los recursos, tiempo y diseño declarados en el proyecto.",
+        "pts_max": 1.0,
+        "pts_obtenido": 0.5,
+        "razon": "Sin información sobre recursos, tiempo y diseño, se asume parcialmente que el objetivo es alcanzable."
+      },
+      {
+        "item_id": "4.6",
+        "descripcion": "Los objetivos no confunden el medio con el fin (no describen actividades del investigador sino resultados esperados del estudio).",
+        "pts_max": 1.0,
+        "pts_obtenido": 1.0,
+        "razon": "El objetivo general se centra en el resultado esperado del estudio (influencia en el rendimiento académico) y no en actividades del investigador."
+      },
+      {
+        "item_id": "4.7",
+        "descripcion": "Existe correspondencia directa entre los objetivos específicos y las hipótesis específicas (trazabilidad).",
+        "pts_max": 1.0,
+        "pts_obtenido": 0.5,
+        "razon": "No se proporcionan objetivos específicos ni hipótesis, por lo que se asume parcialmente que podría haber correspondencia."
+      }
+    ],
+    "gain_score": 0.3684,
+    "gain_score_interpretacion": "mejora moderada",
+    "gain_score_pre": 3.25,
+    "gain_score_post": 5.0,
+    "similitud_coseno": 0.8963,
+    "similitud_coseno_interpretacion": "similitud moderada (preserva el sentido general)",
+    "context_precision": 1.0,
+    "context_precision_chunks_totales": 2,
+    "context_precision_chunks_relevantes": 2,
+    "context_precision_interpretacion": "alta relevancia RAG",
+    "iterative_consistency": [
+      3.25,
+      2.5,
+      3.5
+    ],
+    "iterative_consistency_has_iter": true
+  }
+}

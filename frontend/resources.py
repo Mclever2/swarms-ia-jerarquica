@@ -33,9 +33,15 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)-8s | %(message)s",
     datefmt="%H:%M:%S",
+    force=True,  # fuerza reconfiguracion aunque Streamlit ya haya añadido handlers
 )
+logging.getLogger("mentoria").setLevel(logging.INFO)
 
 load_dotenv(override=True)
+
+# Limpiar el API key de espacios/saltos de línea (problema común con Secret Manager)
+if "OPENAI_API_KEY" in os.environ:
+    os.environ["OPENAI_API_KEY"] = os.environ["OPENAI_API_KEY"].strip()
 
 from backend.agents.director import DirectorOrchestrator
 from backend.rag.library_store import get_library_store

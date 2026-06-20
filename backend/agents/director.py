@@ -58,7 +58,7 @@ def _build_director_con_herramientas(herramientas: list) -> Agent:
         system_prompt=system_prompt,
         model_name=_DIRECTOR_MODEL,
         tools=herramientas,
-        max_loops=12,
+        max_loops=20,
         temperature=0.2,
         streaming_on=False,
         verbose=False,
@@ -148,6 +148,8 @@ class DirectorOrchestrator:
             contexto_teorico=contexto_teorico,
         )
         # Guardar referencias directas para el fallback garantizado
+        _fn_redactor = herramientas[2]  # convocar_redactor
+        _fn_revisar_auditor = herramientas[3]  # revisar_texto_auditor
         _fn_consenso = herramientas[5]  # convocar_consenso
         _fn_disenso  = herramientas[6]  # convocar_disenso
 
@@ -202,6 +204,40 @@ class DirectorOrchestrator:
                 except Exception as _e:
                     logger.warning(f"[Director] Disenso automático falló: {_e}")
 
+        # ── Garantizar texto mejorado del Redactor ────────────────────────────
+        # El Director LLM puede omitir al Redactor si se queda sin loops/tokens.
+        # Si el Auditor respondió pero no hay texto, lo ejecutamos desde Python.
+        if not state.get("texto") and state.get("reporte"):
+            reporte_fb = state["reporte"]
+            obs_fb = state.get("obs_metod") or ""
+            items_obs = [i for i in reporte_fb.items_evaluados if i.puntaje < 2]
+            instrucciones_auto = (
+                f"Mejora el texto de la sección '{seccion_key}' corrigiendo los siguientes problemas:\n\n"
+                f"ÍTEMS OBSERVADOS POR EL AUDITOR (puntaje < 2):\n"
+                + "\n".join(
+                    f"- Ítem {i.item_numero} ({i.puntaje}/3): {i.observacion}"
+                    for i in items_obs
+                )
+                + (f"\n\nOBSERVACIONES DEL METODÓLOGO:\n{obs_fb[:600]}" if obs_fb else "")
+            )
+            logger.info("[Director] Director no activó Redactor — ejecutando automáticamente.")
+            try:
+                if progress_cb:
+                    progress_cb(None, "Generando texto mejorado...")
+                _fn_redactor(instrucciones_auto)
+            except Exception as _e:
+                logger.warning(f"[Director] Redactor automático falló: {_e}")
+
+        # ── Garantizar reporte_revision si hay texto mejorado pero no se auditó ─
+        if state.get("texto") and not state.get("reporte_revision"):
+            logger.info("[Director] Director no auditó el texto mejorado — ejecutando revisión automáticamente.")
+            try:
+                if progress_cb:
+                    progress_cb(None, "Validando texto sugerido con el Auditor...")
+                _fn_revisar_auditor(state["texto"], "todos")
+            except Exception as _e:
+                logger.warning(f"[Director] Auditoría de revisión automática falló: {_e}")
+
         if progress_cb:
             progress_cb(0.97, "Director emitiendo veredicto final...")
 
@@ -236,6 +272,7 @@ class DirectorOrchestrator:
         return {
             "texto_mejorado":     state.get("texto") or "",
             "reporte_auditor":    reporte,
+            "reporte_revision":   state.get("reporte_revision"),
             "obs_metodologica":   state.get("obs_metod") or "",
             "resultado_consenso": state.get("resultado_consenso") or "",
             "resultado_disenso":  state.get("resultado_disenso") or "",

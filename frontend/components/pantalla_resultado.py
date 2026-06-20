@@ -10,6 +10,12 @@ import streamlit as st
 
 from backend.config import SECCIONES
 from frontend import session_manager as sm
+from .pantalla_revision import (
+    _render_tab_metodologico,
+    _render_tab_veredicto,
+    _render_tab_consenso_disenso,
+    _render_tab_metricas,
+)
 
 
 def render():
@@ -19,19 +25,34 @@ def render():
     resultado   = sm.get("resultado") or {}
     seccion_key = sm.get("seccion_activa") or "?"
     info        = SECCIONES.get(seccion_key, {})
-    nota        = resultado.get("nota_vigesimal", 0)
     aprobado    = resultado.get("aprobado", False)
     texto_final = resultado.get("texto_final_aprobado") or resultado.get("texto_mejorado", "")
     reporte     = resultado.get("reporte_auditor")
+    reporte_revision = resultado.get("reporte_revision")
 
     # ── Métricas ──────────────────────────────────────────────────────────────
-    col1, col2, col3 = st.columns(3)
+    puntaje_bruto = reporte.puntaje_total if reporte else 0
+    puntaje_max   = len(reporte.items_evaluados) * 3 if reporte and reporte.items_evaluados else 0
+    iteracion     = sm.get("iteracion_hitl") or 0
+    errores_count = len([i for i in (reporte.items_evaluados if reporte else []) if i.puntaje < 2])
+
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Sección",    info.get("label", seccion_key))
+        st.metric("Re-análisis", f"{iteracion}x")
     with col2:
-        st.metric("Nota Final", f"{nota}/20")
+        st.metric("Errores detectados", errores_count, delta="Sin errores" if errores_count == 0 else None)
     with col3:
-        st.metric("Estado",     "Aprobado" if aprobado else "Observado")
+        if reporte:
+            st.metric("Puntaje UPAO Inicial", sm.badge_puntaje(reporte.puntaje_total, puntaje_max))
+        else:
+            st.metric("Puntaje UPAO Inicial", "—")
+    with col4:
+        if reporte_revision:
+            st.metric("Puntaje UPAO Sugerido", sm.badge_puntaje(reporte_revision.puntaje_total, puntaje_max))
+        elif reporte:
+            st.metric("Puntaje UPAO Sugerido", sm.badge_puntaje(reporte.puntaje_total, puntaje_max))
+        else:
+            st.metric("Puntaje UPAO Sugerido", "—")
 
     st.divider()
 
@@ -56,61 +77,96 @@ def render():
 
     st.divider()
 
-    # ── Resumen del proceso ───────────────────────────────────────────────────
-    with st.expander("Resumen completo del proceso de mentoría"):
-        col_r1, col_r2 = st.columns(2)
+    # ── Tabs de informe ───────────────────────────────────────────────────────
+    tab_eval, tab_debate, tab_rag, tab_reportes = st.tabs([
+        "📋 Evaluación",
+        "⚖️ Debate",
+        "📄 Contexto RAG",
+        "📊 Reportes",
+    ])
 
-        with col_r1:
-            st.markdown("**Feedback final del Auditor:**")
-            st.info(reporte.feedback_general if reporte else "—")
+    with tab_eval:
+        # Rúbrica UPAO Evaluada del Texto de Entrada (Original)
+        if reporte and reporte.items_evaluados:
+            st.subheader("📋 Rúbrica UPAO Evaluada del Texto de Entrada (Original)")
+            from backend.config import RUBRICA_ITEMS_UPAO
+            tabla_markdown = [
+                "| Ítem ID | Criterio de la Rúbrica UPAO | Puntaje | Observación del Evaluador |",
+                "| :--- | :--- | :--- | :--- |"
+            ]
+            for it in reporte.items_evaluados:
+                desc = RUBRICA_ITEMS_UPAO.get(it.item_numero, "Ítem sin descripción")
+                tabla_markdown.append(
+                    f"| **{it.item_numero:02d}** | {desc} | **{it.puntaje}/3** | {it.observacion} |"
+                )
+            st.markdown("\n".join(tabla_markdown))
+            st.divider()
 
-            cons = resultado.get("resultado_consenso", "")
-            diss = resultado.get("resultado_disenso",  "")
-            if cons:
-                st.markdown("**Análisis de Consenso:**")
-                st.info(cons)
-            if diss:
-                st.markdown("**Análisis de Disenso:**")
-                st.warning(diss)
+        # Rúbrica UPAO Evaluada del Texto Sugerido / Final
+        if reporte_revision and reporte_revision.items_evaluados:
+            st.subheader("📋 Rúbrica UPAO Evaluada del Texto Sugerido / Final")
+            from backend.config import RUBRICA_ITEMS_UPAO
+            tabla_markdown_final = [
+                "| Ítem ID | Criterio de la Rúbrica UPAO | Puntaje | Observación del Evaluador |",
+                "| :--- | :--- | :--- | :--- |"
+            ]
+            for it in reporte_revision.items_evaluados:
+                desc = RUBRICA_ITEMS_UPAO.get(it.item_numero, "Ítem sin descripción")
+                tabla_markdown_final.append(
+                    f"| **{it.item_numero:02d}** | {desc} | **{it.puntaje}/3** | {it.observacion} |"
+                )
+            st.markdown("\n".join(tabla_markdown_final))
+            st.divider()
 
-        with col_r2:
-            rubrica = sm.get("rubrica_dinamica")
-            if reporte:
-                observados = [i for i in reporte.items_evaluados if i.puntaje < 2]
-                if observados:
-                    if rubrica:
-                        secciones_rub = rubrica.get("secciones", {})
-                        item_a_sec    = {n: sec for sec, nums in secciones_rub.items() for n in nums}
-                        por_sec: dict = {}
-                        for item in observados:
-                            sec = item_a_sec.get(item.item_numero, "General")
-                            por_sec.setdefault(sec, []).append(item)
-                        st.markdown(f"**Observaciones restantes ({len(observados)} ítems, no bloqueantes):**")
-                        for sec_nombre, items in por_sec.items():
-                            st.markdown(f"*{sec_nombre}*")
-                            for item in items:
-                                st.markdown(
-                                    f"- Ítem **{item.item_numero:02d}** "
-                                    f"(puntaje={item.puntaje}): {item.observacion}"
-                                )
-                    else:
-                        st.markdown(f"**Observaciones restantes ({len(observados)} ítems, no bloqueantes):**")
-                        for item in observados:
-                            st.markdown(
-                                f"- Ítem **{item.item_numero:02d}** "
-                                f"(puntaje={item.puntaje}): {item.observacion}"
-                            )
-                else:
-                    tipo = "la rúbrica personalizada" if rubrica else "la rúbrica UPAO"
-                    st.success(f"El texto cumple todos los ítems evaluados de {tipo}.")
-
+        # Feedback del auditor
+        st.subheader("Feedback del Auditor")
+        st.info(reporte.feedback_general if reporte else "—")
         st.divider()
-        st.markdown("**Log de la jerarquía:**")
+
+        # Observaciones metodológicas
+        st.subheader("Observaciones Metodológicas (rigor científico)")
+        _render_tab_metodologico(resultado.get("obs_metodologica", ""))
+        st.divider()
+
+        # Veredicto del Director
+        st.subheader("Veredicto del Director")
+        _render_tab_veredicto(resultado.get("veredicto_director", ""))
+
+    with tab_debate:
+        _render_tab_consenso_disenso(resultado)
+        st.divider()
+        st.markdown("**Actividad del Enjambre Jerárquico:**")
         st.caption(resultado.get("log_debate", "—"))
-        st.caption(
-            "Las métricas de coherencia multiagente (TF-IDF Cosine, ROUGE-L, Acuerdo, Mejora) "
-            "se guardaron en backend/logs/ para análisis del investigador."
-        )
+
+    with tab_rag:
+        rag_sub_tabs = st.tabs([
+            "📄 Contexto de la sección (RAG)",
+            "🔗 Contexto cruzado (Otras secciones)",
+            "📚 Contexto metodológico (Libros)"
+        ])
+
+        with rag_sub_tabs[0]:
+            st.markdown("**Contexto original extraído del PDF (sección evaluada):**")
+            st.code(sm.get("ctx_rag_actual") or "—", language=None, wrap_lines=True)
+            st.divider()
+            st.markdown("**Fragmentos individuales:**")
+            contexto_raw = sm.get("ctx_rag_actual") or ""
+            for i, fragmento in enumerate(contexto_raw.split("---"), start=1):
+                if fragmento.strip():
+                    with st.expander(f"Fragmento {i}"):
+                        st.code(fragmento.strip(), language=None, wrap_lines=True)
+
+        with rag_sub_tabs[1]:
+            st.markdown("**Contexto de secciones cruzadas relacionadas:**")
+            st.code(sm.get("ctx_cruzado_actual") or "Sin contexto cruzado.", language=None, wrap_lines=True)
+
+        with rag_sub_tabs[2]:
+            st.markdown("**Contexto metodológico de libros de referencia:**")
+            st.code(sm.get("ctx_teorico_actual") or "Sin contexto metodológico de libros.", language=None, wrap_lines=True)
+
+
+    with tab_reportes:
+        _render_tab_metricas(resultado, seccion_key, puntaje_bruto, puntaje_max)
 
     st.divider()
 
@@ -131,7 +187,6 @@ def render():
     with col_json:
         export = {
             "seccion":           seccion_key,
-            "nota_vigesimal":    nota,
             "aprobado":          aprobado,
             "puntaje_total":     reporte.puntaje_total if reporte else 0,
             "texto_final":       texto_final,
@@ -152,13 +207,20 @@ def render():
 
     # ── Historial y botones ───────────────────────────────────────────────────
     historial = sm.get("historial_sesion") or []
-    historial.append({"seccion": info.get("label", seccion_key), "nota": nota})
-    sm.set("historial_sesion", historial)
+    seccion_label = info.get("label", seccion_key)
+    if not any(entry.get("seccion") == seccion_label for entry in historial):
+        historial.append({
+            "seccion": seccion_label,
+            "puntaje": puntaje_bruto,
+            "puntaje_max": puntaje_max,
+            "estado": "Aprobado" if aprobado else "Observado"
+        })
+        sm.set("historial_sesion", historial)
 
     if len(historial) > 1:
         st.subheader("Historial de esta sesión")
         for entry in historial:
-            st.markdown(f"- **{entry['seccion']}** — Nota: {entry['nota']}/20")
+            st.markdown(f"- **{entry['seccion']}** — Puntaje: {entry['puntaje']}/{entry['puntaje_max']} ({entry['estado']})")
 
     col_b1, col_b2 = st.columns(2)
     with col_b1:
