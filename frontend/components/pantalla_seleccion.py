@@ -12,7 +12,7 @@ import re
 
 import streamlit as st
 
-from backend.config import SECCIONES, SECCIONES_TESIS, SECCION_ITEMS_MAP, RUBRICA_ITEMS_UPAO
+from backend.config import SECCIONES, SECCIONES_TESIS, SECCION_ITEMS_MAP, RUBRICA_ITEMS_UPAO, _mapear_a_clave_config
 from frontend import session_manager as sm
 
 
@@ -143,49 +143,5 @@ def render() -> None:
 
 
 # ── Mapeo TOC → clave de config ───────────────────────────────────────────────
+# (Mapeado dinámicamente desde backend.config)
 
-# Palabras clave por clave de config. Orden importa: más específico primero.
-_KW_MAP: list[tuple[str, list[str]]] = [
-    ("referencias",              ["referencia", "bibliograf"]),
-    ("aspectos_administrativos", ["administrat", "cronograma", "presupuesto", "recursos", "financiamiento"]),
-    ("marco_metodologico",       ["metodológ", "metodolog", "tipo", "diseño", "diseño", "población",
-                                   "muestra", "instrumento", "procedimiento", "análisis de dato"]),
-    ("hipotesis_variables",      ["hipótes", "hipotes", "variable", "operacional", "matriz de consistencia",
-                                   "consistencia"]),
-    ("marco_teorico",            ["marco teóric", "marco teoric", "teóric", "teoric",
-                                   "antecedente", "base teóric", "término", "termin", "citación"]),
-    ("planteamiento_problema",   ["planteamiento", "problema", "formulación", "formulacion",
-                                   "objetivo", "justificaci", "importancia", "descripción", "descripcion",
-                                   "delimitación", "delimitacion"]),
-    ("titulo",                   ["título", "titulo", "información general", "informacion general"]),
-]
-
-
-def _mapear_a_clave_config(nombre_toc: str) -> str | None:
-    """
-    Intenta mapear un nombre de sección del TOC del PDF a una clave de SECCIONES del config.
-    Estrategia: primero prefijo numérico, luego palabras clave.
-    Retorna None si no hay coincidencia.
-    """
-    nombre_lower = nombre_toc.lower()
-
-    # 1. Prefijo numérico (solo si el PDF usa numeración arábiga estándar UPAO)
-    m = re.match(r'^(\d+)[\.\s]', nombre_toc.strip())
-    if m:
-        cap = int(m.group(1))
-        _PREFIX_MAP = {
-            1: "planteamiento_problema",
-            2: "marco_teorico",
-            3: "hipotesis_variables",
-            4: "marco_metodologico",
-            5: "aspectos_administrativos",
-        }
-        if cap in _PREFIX_MAP:
-            return _PREFIX_MAP[cap]
-
-    # 2. Palabras clave
-    for clave, keywords in _KW_MAP:
-        if any(kw in nombre_lower for kw in keywords):
-            return clave
-
-    return None

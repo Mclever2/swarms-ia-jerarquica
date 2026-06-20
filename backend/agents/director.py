@@ -149,6 +149,7 @@ class DirectorOrchestrator:
         )
         # Guardar referencias directas para el fallback garantizado
         _fn_redactor = herramientas[2]  # convocar_redactor
+        _fn_revisar_auditor = herramientas[3]  # revisar_texto_auditor
         _fn_consenso = herramientas[5]  # convocar_consenso
         _fn_disenso  = herramientas[6]  # convocar_disenso
 
@@ -227,6 +228,16 @@ class DirectorOrchestrator:
             except Exception as _e:
                 logger.warning(f"[Director] Redactor automático falló: {_e}")
 
+        # ── Garantizar reporte_revision si hay texto mejorado pero no se auditó ─
+        if state.get("texto") and not state.get("reporte_revision"):
+            logger.info("[Director] Director no auditó el texto mejorado — ejecutando revisión automáticamente.")
+            try:
+                if progress_cb:
+                    progress_cb(None, "Validando texto sugerido con el Auditor...")
+                _fn_revisar_auditor(state["texto"], "todos")
+            except Exception as _e:
+                logger.warning(f"[Director] Auditoría de revisión automática falló: {_e}")
+
         if progress_cb:
             progress_cb(0.97, "Director emitiendo veredicto final...")
 
@@ -261,6 +272,7 @@ class DirectorOrchestrator:
         return {
             "texto_mejorado":     state.get("texto") or "",
             "reporte_auditor":    reporte,
+            "reporte_revision":   state.get("reporte_revision"),
             "obs_metodologica":   state.get("obs_metod") or "",
             "resultado_consenso": state.get("resultado_consenso") or "",
             "resultado_disenso":  state.get("resultado_disenso") or "",

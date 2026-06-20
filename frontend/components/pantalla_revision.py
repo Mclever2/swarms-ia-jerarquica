@@ -44,6 +44,8 @@ def _ejecutar_pipeline(seccion_key: str):
     ctx_cruzado = query_cross_context(store, seccion_key)[:MAX_CONTEXT_CHARS]
     ctx_teorico = recuperar_contexto_teorico(get_library(), seccion_key)[:MAX_CONTEXT_CHARS]
     sm.set("ctx_rag_actual", ctx_rag)
+    sm.set("ctx_cruzado_actual", ctx_cruzado)
+    sm.set("ctx_teorico_actual", ctx_teorico)
 
     progress_bar = st.progress(0.0, text="Iniciando pipeline jerárquico...")
 
@@ -62,10 +64,41 @@ def _ejecutar_pipeline(seccion_key: str):
                 rubrica_dinamica=rubrica,
                 contexto_teorico=ctx_teorico,
             )
+
+        # Compilar datos para el evaluador en memoria
+        import uuid
+        run_id = str(uuid.uuid4())[:8]
+
+        historial_hitl = sm.get("historial_hitl_textos") or []
+        if not historial_hitl:
+            historial_hitl.append(ctx_rag)
+        historial_hitl.append(resultado.get("texto_mejorado", ""))
+        sm.set("historial_hitl_textos", historial_hitl)
+
+        payload = {
+            "run_id": run_id,
+            "arquitectura": "Hierarchical Swarms",
+            "universidad": sm.get("universidad") or "UPAO",
+            "texto_inicial": ctx_rag,
+            "texto_final": resultado.get("texto_mejorado", ""),
+            "seccion_objetivo": seccion_key,
+            "contexto_teorico": ctx_teorico,
+            "historial_textos": historial_hitl
+        }
+
+        try:
+            from evaluator import evaluar as run_evaluator
+            eval_metrics = run_evaluator(payload)
+            resultado["eval_metrics"] = eval_metrics
+        except Exception as eval_exc:
+            import logging
+            logging.getLogger("mentoria").warning(f"[Evaluator] Memory evaluation failed: {eval_exc}")
+
         progress_bar.progress(1.0, "Análisis completado.")
         sm.set("resultado",     resultado)
         sm.set("texto_editado", resultado.get("texto_mejorado", ""))
         st.rerun()
+
     except Exception as exc:
         import logging
         logging.getLogger("mentoria").error(f"Error en pipeline: {exc}", exc_info=True)
@@ -83,7 +116,7 @@ def _ejecutar_pipeline(seccion_key: str):
 
 def _mostrar_resultado(resultado: dict, seccion_key: str):
     reporte  = resultado.get("reporte_auditor")
-    nota     = resultado.get("nota_vigesimal", 0)
+    reporte_revision = resultado.get("reporte_revision")
     aprobado = resultado.get("aprobado", False)
     rubrica  = sm.get("rubrica_dinamica")
 
@@ -91,83 +124,152 @@ def _mostrar_resultado(resultado: dict, seccion_key: str):
     puntaje_bruto = reporte.puntaje_total if reporte else 0
     puntaje_max   = len(reporte.items_evaluados) * 3 if reporte and reporte.items_evaluados else 0
     iteracion     = sm.get("iteracion_hitl") or 0
+    errores_count = len([i for i in (reporte.items_evaluados if reporte else []) if i.puntaje < 2])
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric(
-        "Nota Vigesimal",
-        f"{nota}/20",
-        help="Calificación sobre 20 puntos, calculada en proporción a los ítems evaluados en esta sección.",
-    )
-    c2.metric(
-        "Puntaje Bruto",
-        f"{puntaje_bruto}/{puntaje_max} pts",
-        help=f"Suma de puntajes obtenidos (0-3 por ítem). Máximo posible: {puntaje_max} pts ({puntaje_max // 3} ítems × 3).",
-    )
-    c3.metric(
-        "Estado",
-        "APROBADO ✅" if aprobado else "Observado ⚠️",
-        help="APROBADO: todos los ítems tienen puntaje ≥ 2. Observado: uno o más ítems con puntaje 0-1 requieren corrección.",
-    )
-    c4.metric(
         "Re-análisis",
         f"{iteracion}x",
-        help="Número de veces que el Mentor rechazó el resultado y solicitó un nuevo análisis del Director.",
+        help="Número de veces que el Mentor rechazó el resultado y solicitó un nuevo análisis.",
     )
+    c2.metric(
+        "Errores detectados",
+        errores_count,
+        delta="Sin errores" if errores_count == 0 else None,
+        help="Número de ítems de la rúbrica con puntaje < 2 en la evaluación inicial.",
+    )
+    if reporte:
+        c3.metric("Puntaje UPAO Inicial", sm.badge_puntaje(reporte.puntaje_total, puntaje_max))
+    else:
+        c3.metric("Puntaje UPAO Inicial", "—")
+
+    if reporte_revision:
+        c4.metric("Puntaje UPAO Sugerido", sm.badge_puntaje(reporte_revision.puntaje_total, puntaje_max))
+    elif reporte:
+        c4.metric("Puntaje UPAO Sugerido", sm.badge_puntaje(reporte.puntaje_total, puntaje_max))
+    else:
+        c4.metric("Puntaje UPAO Sugerido", "—")
 
     st.divider()
 
     # ── Tabs de informe ───────────────────────────────────────────────────────
-    tabs = st.tabs([
-        "Informe del Auditor",
-        "Observaciones Metodológicas",
-        "Consenso / Disenso",
-        "Veredicto del Director",
-        "Métricas del Ciclo",
+    tab_eval, tab_debate, tab_rag, tab_reportes = st.tabs([
+        "📋 Evaluación",
+        "⚖️ Debate",
+        "📄 Contexto RAG",
+        "📊 Reportes",
     ])
 
-    with tabs[0]:
-        _render_tab_auditor(reporte, seccion_key, rubrica)
+    with tab_eval:
+        # Rúbrica UPAO Evaluada del Texto de Entrada (Original)
+        if reporte and reporte.items_evaluados:
+            st.subheader("📋 Rúbrica UPAO Evaluada del Texto de Entrada (Original)")
+            from backend.config import RUBRICA_ITEMS_UPAO
+            tabla_markdown = [
+                "| Ítem ID | Criterio de la Rúbrica UPAO | Puntaje | Observación del Evaluador |",
+                "| :--- | :--- | :--- | :--- |"
+            ]
+            for it in reporte.items_evaluados:
+                desc = RUBRICA_ITEMS_UPAO.get(it.item_numero, "Ítem sin descripción")
+                tabla_markdown.append(
+                    f"| **{it.item_numero:02d}** | {desc} | **{it.puntaje}/3** | {it.observacion} |"
+                )
+            st.markdown("\n".join(tabla_markdown))
+            st.divider()
 
-    with tabs[1]:
+        # Rúbrica UPAO Evaluada del Texto Sugerido / Final
+        if reporte_revision and reporte_revision.items_evaluados:
+            st.subheader("📋 Rúbrica UPAO Evaluada del Texto Sugerido / Final")
+            from backend.config import RUBRICA_ITEMS_UPAO
+            tabla_markdown_final = [
+                "| Ítem ID | Criterio de la Rúbrica UPAO | Puntaje | Observación del Evaluador |",
+                "| :--- | :--- | :--- | :--- |"
+            ]
+            for it in reporte_revision.items_evaluados:
+                desc = RUBRICA_ITEMS_UPAO.get(it.item_numero, "Ítem sin descripción")
+                tabla_markdown_final.append(
+                    f"| **{it.item_numero:02d}** | {desc} | **{it.puntaje}/3** | {it.observacion} |"
+                )
+            st.markdown("\n".join(tabla_markdown_final))
+            st.divider()
+
+        # Feedback del auditor
+        st.subheader("Feedback del Auditor")
+        st.info(reporte.feedback_general if reporte else "—")
+        st.divider()
+
+        # Observaciones metodológicas
+        st.subheader("Observaciones Metodológicas (rigor científico)")
         _render_tab_metodologico(resultado.get("obs_metodologica", ""))
+        st.divider()
 
-    with tabs[2]:
-        _render_tab_consenso_disenso(resultado)
-
-    with tabs[3]:
+        # Veredicto del Director
+        st.subheader("Veredicto del Director")
         _render_tab_veredicto(resultado.get("veredicto_director", ""))
+        st.divider()
 
-    with tabs[4]:
+        # ── Editor de texto ──
+        sec_label = sm.get("seccion_nombre_toc") or SECCIONES.get(seccion_key, {}).get("label", seccion_key)
+        st.subheader(f"Texto mejorado — Sección: *{sec_label}*")
+        st.caption(
+            "El sistema mejoró el texto del estudiante basándose en su contenido original y la rúbrica activa. "
+            "Puedes editarlo antes de aprobar. Los marcadores [COMPLETAR: ...] indican que el estudiante "
+            "debe completar esa parte con información real de su investigación."
+        )
+
+        texto_editado = st.text_area(
+            label="Texto para aprobación:",
+            value=sm.get("texto_editado") or resultado.get("texto_mejorado", ""),
+            height=400,
+            key="area_texto_editado",
+            label_visibility="collapsed",
+        )
+        sm.set("texto_editado", texto_editado)
+
+        if "[COMPLETAR:" in texto_editado:
+            st.warning(
+                "El texto contiene marcadores `[COMPLETAR: ...]`. "
+                "Estos indican secciones que **el estudiante debe completar** "
+                "con información real de su investigación."
+            )
+
+    with tab_debate:
+        _render_tab_consenso_disenso(resultado)
+        st.divider()
+        st.markdown("**Actividad del Enjambre Jerárquico:**")
+        st.caption(resultado.get("log_debate", "—"))
+
+    with tab_rag:
+        rag_sub_tabs = st.tabs([
+            "📄 Contexto de la sección (RAG)",
+            "🔗 Contexto cruzado (Otras secciones)",
+            "📚 Contexto metodológico (Libros)"
+        ])
+
+        with rag_sub_tabs[0]:
+            st.markdown("**Contexto original extraído del PDF (sección evaluada):**")
+            st.code(sm.get("ctx_rag_actual") or "—", language=None, wrap_lines=True)
+            st.divider()
+            st.markdown("**Fragmentos individuales:**")
+            contexto_raw = sm.get("ctx_rag_actual") or ""
+            for i, fragmento in enumerate(contexto_raw.split("---"), start=1):
+                if fragmento.strip():
+                    with st.expander(f"Fragmento {i}"):
+                        st.code(fragmento.strip(), language=None, wrap_lines=True)
+
+        with rag_sub_tabs[1]:
+            st.markdown("**Contexto de secciones cruzadas relacionadas:**")
+            st.code(sm.get("ctx_cruzado_actual") or "Sin contexto cruzado.", language=None, wrap_lines=True)
+
+        with rag_sub_tabs[2]:
+            st.markdown("**Contexto metodológico de libros de referencia:**")
+            st.code(sm.get("ctx_teorico_actual") or "Sin contexto metodológico de libros.", language=None, wrap_lines=True)
+
+    with tab_reportes:
         _render_tab_metricas(resultado, seccion_key, puntaje_bruto, puntaje_max)
 
     st.divider()
 
-    # ── Editor de texto ───────────────────────────────────────────────────────
-    sec_label = sm.get("seccion_nombre_toc") or SECCIONES.get(seccion_key, {}).get("label", seccion_key)
-    st.subheader(f"Texto mejorado — Sección: *{sec_label}*")
-    st.caption(
-        "El sistema mejoró el texto del estudiante basándose en su contenido original y la rúbrica activa. "
-        "Puedes editarlo antes de aprobar. Los marcadores [COMPLETAR: ...] indican que el estudiante "
-        "debe completar esa parte con información real de su investigación."
-    )
-
-    texto_editado = st.text_area(
-        label="Texto para aprobación:",
-        value=sm.get("texto_editado") or resultado.get("texto_mejorado", ""),
-        height=400,
-        key="area_texto_editado",
-        label_visibility="collapsed",
-    )
-    sm.set("texto_editado", texto_editado)
-
-    if "[COMPLETAR:" in texto_editado:
-        st.warning(
-            "El texto contiene marcadores `[COMPLETAR: ...]`. "
-            "Estos indican secciones que **el estudiante debe completar** "
-            "con información real de su investigación."
-        )
-
-    st.divider()
 
     # ── Decisión HITL ─────────────────────────────────────────────────────────
     st.subheader("Decisión del Mentor")
@@ -324,70 +426,91 @@ def _render_tab_metricas(
     puntaje_bruto: int,
     puntaje_max: int,
 ) -> None:
-    """
-    Métricas NLP idénticas al proyecto LangGraph:
-      Fila 1 — ROUGE-1, ROUGE-2, ROUGE-L, BLEU
-      Fila 2 — Cos sim, Gain Score, Kappa, Puntaje 0-10
+    eval_metrics = resultado.get("eval_metrics", {})
+    metricas = eval_metrics.get("metricas", {})
 
-    Más la sección de actividad del enjambre (única de swarms).
-    """
-    import re as _re
+    st.markdown("#### Métricas de Proceso y Calidad (Rúbrica Especializada)")
+    st.caption("Métricas metodológicas y de calidad calculadas en tiempo real por el Evaluador.")
 
-    ctx_original   = sm.get("ctx_rag_actual") or ""
-    texto_mejorado = resultado.get("texto_mejorado", "")
-    log_debate     = resultado.get("log_debate", "")
-    iteracion_hitl = sm.get("iteracion_hitl") or 0
-
-    # ── Calcular métricas NLP ─────────────────────────────────────────────────
-    metricas: dict = {}
-    try:
-        from backend.metrics.nlp_metrics import calcular_todas
-        metricas = calcular_todas(
-            texto_referencia=ctx_original,
-            texto_generado=texto_mejorado,
-            puntaje_inicial=0,
-            puntaje_final=float(puntaje_bruto),
-            puntaje_maximo=float(puntaje_max),
-            historial_texto=[],   # swarms no tiene turnos de debate como texto
-        )
-    except Exception as _exc:
-        import logging
-        logging.getLogger("mentoria").warning(f"[NLP] Error calculando métricas: {_exc}")
-
-    # ── Mostrar: Métricas NLP ─────────────────────────────────────────────────
-    st.markdown("#### Métricas NLP")
-    st.caption(
-        "Comparan el *texto original* analizado vs el *texto sugerido* "
-        "(reescritura propuesta por el pipeline)."
+    # 4 metrics columns
+    c1, c2, c3, c4 = st.columns(4)
+    
+    # 1. LLM-as-Judge (G-Eval)
+    score_ob = metricas.get("llm_judge_score", 0.0)
+    score_mx = metricas.get("llm_judge_max", 0.0)
+    c1.metric(
+        "LLM-as-Judge (G-Eval)",
+        f"{score_ob} / {score_mx}",
+        help="Evaluación realizada por el Juez LLM externo aplicando la rúbrica institucional."
     )
 
-    # Fila 1 — ROUGE-1, ROUGE-2, ROUGE-L, BLEU
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("ROUGE-1", f"{metricas.get('rouge1_f', 0.0):.3f}")
-    col2.metric("ROUGE-2", f"{metricas.get('rouge2_f', 0.0):.3f}")
-    col3.metric("ROUGE-L", f"{metricas.get('rougeL_f', 0.0):.3f}")
-    col4.metric("BLEU",    f"{metricas.get('bleu_score', 0.0):.3f}")
+    # 2. Gain Score (Hake)
+    gain = metricas.get("gain_score", 0.0)
+    interp_gain = metricas.get("gain_score_interpretacion", "")
+    c2.metric(
+        "Gain Score (Hake)",
+        f"{gain:+.4f}",
+        delta=interp_gain.title() if interp_gain else None,
+        help="Mejora metodológica neta (Hake) del texto pre -> post. Mide la efectividad de la corrección."
+    )
 
-    # Fila 2 — Cos sim, Gain Score, Kappa, Puntaje 0-10
-    col5, col6, col7, col8 = st.columns(4)
-    col5.metric("Cos sim",       f"{metricas.get('similitud_coseno', 0.0):.3f}")
-    g = metricas.get("gain_score")
-    col6.metric("Gain Score",    f"{g:.3f}" if g is not None else "—")
-    k = metricas.get("kappa")
-    col7.metric("Kappa",         f"{k:.3f}" if k is not None else "—")
-    col8.metric("Puntaje 0-10",  f"{metricas.get('puntaje_10', 0.0):.1f}")
+    # 3. Similitud Coseno (e5)
+    sim_cos = metricas.get("similitud_coseno", 0.0)
+    interp_cos = metricas.get("similitud_coseno_interpretacion", "")
+    c3.metric(
+        "Similitud Coseno (e5)",
+        f"{sim_cos:.4f}",
+        delta=interp_cos if interp_cos else None,
+        help="Similitud semántica entre el texto original y el texto mejorado utilizando multilingual-e5."
+    )
 
-    st.caption(
-        "*Kappa: requiere ≥2 iteraciones. Usa el botón Rechazar para re-analizar y activarlo.*"
+    # 4. Context Precision
+    ctx_prec = metricas.get("context_precision", 0.0)
+    interp_ctx = metricas.get("context_precision_interpretacion", "")
+    c4.metric(
+        "Context Precision",
+        f"{ctx_prec:.4f}",
+        delta=interp_ctx if interp_ctx else None,
+        help="Precisión y relevancia de los fragmentos teóricos recuperados de la biblioteca de libros."
     )
 
     st.divider()
 
-    # ── Actividad del enjambre ────────────────────────────────────────────────
+    # Detailed table of G-Eval
+    st.markdown("#### 📋 Detalle de la Evaluación del Juez LLM (G-Eval)")
+    secciones_sel = metricas.get("llm_judge_secciones", [])
+    if secciones_sel:
+        st.markdown(f"**Secciones de la Rúbrica Seleccionadas:** {', '.join(secciones_sel)}")
+
+    items_evaluados = metricas.get("llm_judge_items", [])
+    if items_evaluados:
+        tabla_markdown = [
+            "| Ítem ID | Criterio de la Rúbrica | Puntaje | Justificación Académica |",
+            "| :--- | :--- | :--- | :--- |"
+        ]
+        for it in items_evaluados:
+            item_id = it.get("item_id", "?")
+            desc = it.get("descripcion", "")
+            pts_ob = it.get("pts_obtenido", 0.0)
+            pts_mx = it.get("pts_max", 0.0)
+            razon = it.get("razon", "")
+            tabla_markdown.append(
+                f"| {item_id} | {desc} | **{pts_ob}/{pts_mx}** | {razon} |"
+            )
+        st.markdown("\n".join(tabla_markdown))
+    else:
+        st.info("No hay detalles de ítems del Juez LLM disponibles.")
+
+    st.divider()
+
+    # Actividad del enjambre
     st.markdown("#### Actividad del Enjambre Jerárquico")
+    log_debate = resultado.get("log_debate", "")
+    iteracion_hitl = sm.get("iteracion_hitl") or 0
 
     auditor_calls = metodologico_calls = redactor_calls = "—"
     if log_debate:
+        import re as _re
         m_a = _re.search(r"Auditor:\s*(\d+)x", log_debate)
         m_m = _re.search(r"Metodólogo:\s*(\d+)x", log_debate)
         m_r = _re.search(r"Redactor:\s*(\d+)x", log_debate)
@@ -405,29 +528,10 @@ def _render_tab_metricas(
     ch.metric("Re-análisis",   f"{iteracion_hitl}×",
               help="Veces que el Mentor rechazó el resultado y solicitó un nuevo análisis.")
 
-    st.divider()
-
-    # ── Datos crudos ──────────────────────────────────────────────────────────
+    # raw data
     with st.expander("Ver datos crudos del ciclo"):
-        st.json({
-            "seccion":          seccion_key,
-            "puntaje_bruto":    puntaje_bruto,
-            "puntaje_max":      puntaje_max,
-            "rouge1_f":         metricas.get("rouge1_f", 0.0),
-            "rouge2_f":         metricas.get("rouge2_f", 0.0),
-            "rougeL_f":         metricas.get("rougeL_f", 0.0),
-            "bleu_score":       metricas.get("bleu_score", 0.0),
-            "similitud_coseno": metricas.get("similitud_coseno", 0.0),
-            "gain_score":       metricas.get("gain_score"),
-            "kappa":            metricas.get("kappa"),
-            "puntaje_10":       metricas.get("puntaje_10", 0.0),
-            "iteraciones_hitl": iteracion_hitl,
-            "llamadas_agentes": {
-                "auditor":      auditor_calls,
-                "metodologico": metodologico_calls,
-                "redactor":     redactor_calls,
-            },
-        })
+        st.json(resultado)
+
 
 
 # ── Métricas de coherencia (uso interno investigador) ─────────────────────────

@@ -1,0 +1,126 @@
+{
+  "run_id": "8fb5fc92",
+  "arquitectura": "Hierarchical Swarms",
+  "universidad": "UPAO",
+  "metricas": {
+    "llm_judge_score": 11.25,
+    "llm_judge_max": 15.0,
+    "llm_judge_pct": 0.75,
+    "llm_judge_secciones": [
+      "2. Descripción y delimitación del problema",
+      "3. Formulación del problema (pregunta central)"
+    ],
+    "llm_judge_items": [
+      {
+        "item_id": "2.1",
+        "descripcion": "Se presenta evidencia empírica (datos estadísticos, estudios previos o reportes oficiales) que demuestra la existencia del problema.",
+        "pts_max": 1.5,
+        "pts_obtenido": 0.75,
+        "razon": "El texto menciona la baja calidad metodológica y los retrasos en los proyectos de tesis, pero no proporciona datos estadísticos o estudios previos que respalden estas afirmaciones. Se sugiere que hay un problema, pero falta evidencia empírica concreta."
+      },
+      {
+        "item_id": "2.2",
+        "descripcion": "El problema está enmarcado desde lo global hacia lo local (contextualización multinivel: mundial → regional → local).",
+        "pts_max": 1.0,
+        "pts_obtenido": 0.0,
+        "razon": "El texto no contextualiza el problema en un marco más amplio, como a nivel mundial o regional. Se centra únicamente en la situación local de los estudiantes de Ingeniería, lo que limita la comprensión del problema en un contexto más amplio."
+      },
+      {
+        "item_id": "2.3",
+        "descripcion": "Se identifica con claridad la brecha de conocimiento o la deficiencia tecnológica/metodológica que motiva el estudio.",
+        "pts_max": 1.5,
+        "pts_obtenido": 1.5,
+        "razon": "Se identifica claramente la brecha en la calidad metodológica y la insuficiencia en la supervisión docente como motivaciones para el estudio, lo que justifica la necesidad de la investigación."
+      },
+      {
+        "item_id": "2.4",
+        "descripcion": "Se delimitan las variables principales del problema (qué se va a medir o comparar) de manera explícita.",
+        "pts_max": 1.0,
+        "pts_obtenido": 0.5,
+        "razon": "Se mencionan variables como la calidad metodológica y los retrasos en los proyectos de tesis, pero no se delimitan de manera explícita ni se especifica cómo se medirán o compararán."
+      },
+      {
+        "item_id": "2.5",
+        "descripcion": "Se delimita el alcance temporal y espacial del estudio (periodo y lugar de ejecución).",
+        "pts_max": 1.0,
+        "pts_obtenido": 0.0,
+        "razon": "No se menciona un alcance temporal ni espacial específico para el estudio, lo que dificulta la comprensión de los límites de la investigación."
+      },
+      {
+        "item_id": "2.6",
+        "descripcion": "La descripción del problema es coherente con el tipo y diseño de investigación declarado más adelante.",
+        "pts_max": 1.0,
+        "pts_obtenido": 1.0,
+        "razon": "La descripción del problema es coherente con la investigación propuesta, ya que se menciona la necesidad de analizar la calidad metodológica y los retrasos, lo que se alinea con el enfoque de la investigación."
+      },
+      {
+        "item_id": "2.7",
+        "descripcion": "Se mencionan las consecuencias o impacto negativo de no resolver el problema (argumento de urgencia o relevancia).",
+        "pts_max": 1.0,
+        "pts_obtenido": 0.5,
+        "razon": "Se menciona que la falta de atención y supervisión puede llevar a investigaciones con escaso rigor, pero no se profundiza en las consecuencias negativas de no abordar el problema."
+      },
+      {
+        "item_id": "2.8",
+        "descripcion": "La redacción es clara, libre de ambigüedad y no mezcla el problema con la solución propuesta.",
+        "pts_max": 1.0,
+        "pts_obtenido": 1.0,
+        "razon": "La redacción es clara y se presenta el problema de manera directa, sin mezclarlo con las soluciones propuestas, lo que facilita la comprensión del mismo."
+      },
+      {
+        "item_id": "2.9",
+        "descripcion": "El problema puede ser investigado empíricamente, es decir, sus variables son observables o medibles.",
+        "pts_max": 1.0,
+        "pts_obtenido": 1.0,
+        "razon": "Las variables mencionadas, como la calidad metodológica y los retrasos, son observables y medibles, lo que permite que el problema sea investigado empíricamente."
+      },
+      {
+        "item_id": "3.1",
+        "descripcion": "El problema está formulado como una pregunta clara, directa y sin ambigüedad (¿en qué medida?, ¿qué efecto?, ¿cómo se relaciona?).",
+        "pts_max": 1.5,
+        "pts_obtenido": 1.5,
+        "razon": "La pregunta formulada es clara y directa, planteando el efecto del uso de sistemas multi-agente en la calidad metodológica y en la reducción de retrasos, lo que permite una investigación enfocada."
+      },
+      {
+        "item_id": "3.2",
+        "descripcion": "La pregunta involucra al menos dos variables o conceptos y su posible relación, diferencia o efecto.",
+        "pts_max": 1.0,
+        "pts_obtenido": 1.0,
+        "razon": "La pregunta incluye las variables 'sistemas multi-agente' y 'calidad metodológica', así como 'retrasos', lo que permite explorar su relación."
+      },
+      {
+        "item_id": "3.3",
+        "descripcion": "La pregunta es respondible mediante el diseño de investigación propuesto (no requiere datos imposibles de obtener).",
+        "pts_max": 1.0,
+        "pts_obtenido": 1.0,
+        "razon": "La pregunta es respondible con el diseño de investigación propuesto, ya que se pueden obtener datos sobre la calidad metodológica y los retrasos en los proyectos de tesis."
+      },
+      {
+        "item_id": "3.4",
+        "descripcion": "La pregunta no es demasiado amplia ni demasiado estrecha; delimita un problema tratable en el tiempo del estudio.",
+        "pts_max": 0.75,
+        "pts_obtenido": 0.75,
+        "razon": "La pregunta está bien delimitada y se enfoca en un aspecto específico del problema, lo que la hace tratable dentro del tiempo del estudio."
+      },
+      {
+        "item_id": "3.5",
+        "descripcion": "La pregunta es coherente con los objetivos (la respuesta a la pregunta equivale a lograr el objetivo general).",
+        "pts_max": 0.75,
+        "pts_obtenido": 0.75,
+        "razon": "La pregunta es coherente con los objetivos planteados, ya que busca responder a la problemática central del estudio."
+      }
+    ],
+    "gain_score": 0.5714,
+    "gain_score_interpretacion": "mejora moderada",
+    "gain_score_pre": 6.25,
+    "gain_score_post": 11.25,
+    "similitud_coseno": 0.9842,
+    "similitud_coseno_interpretacion": "alta similitud semántica (sin desviaciones)",
+    "context_precision": 1.0,
+    "context_precision_chunks_totales": 2,
+    "context_precision_chunks_relevantes": 2,
+    "context_precision_interpretacion": "alta relevancia RAG",
+    "iterative_consistency": [],
+    "iterative_consistency_has_iter": false
+  }
+}

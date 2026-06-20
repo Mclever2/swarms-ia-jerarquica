@@ -1,0 +1,126 @@
+{
+  "run_id": "063b2b58",
+  "arquitectura": "Hierarchical Swarms",
+  "universidad": "UPAO",
+  "metricas": {
+    "llm_judge_score": 10.25,
+    "llm_judge_max": 15.0,
+    "llm_judge_pct": 0.6833,
+    "llm_judge_secciones": [
+      "2. Descripción y delimitación del problema",
+      "3. Formulación del problema (pregunta central)"
+    ],
+    "llm_judge_items": [
+      {
+        "item_id": "2.1",
+        "descripcion": "Se presenta evidencia empírica (datos estadísticos, estudios previos o reportes oficiales) que demuestra la existencia del problema.",
+        "pts_max": 1.5,
+        "pts_obtenido": 0.75,
+        "razon": "El texto menciona la baja calidad metodológica y los retrasos en la culminación de proyectos de tesis, pero no proporciona datos estadísticos o estudios previos que respalden estas afirmaciones. Se sugiere que hay un problema, pero falta evidencia empírica concreta."
+      },
+      {
+        "item_id": "2.2",
+        "descripcion": "El problema está enmarcado desde lo global hacia lo local (contextualización multinivel: mundial → regional → local).",
+        "pts_max": 1.0,
+        "pts_obtenido": 0.0,
+        "razon": "El texto no contextualiza el problema en un marco más amplio, como el impacto global o regional de la calidad metodológica en proyectos de tesis. Se centra únicamente en la situación local sin un análisis más amplio."
+      },
+      {
+        "item_id": "2.3",
+        "descripcion": "Se identifica con claridad la brecha de conocimiento o la deficiencia tecnológica/metodológica que motiva el estudio.",
+        "pts_max": 1.5,
+        "pts_obtenido": 1.5,
+        "razon": "Se identifica claramente la brecha en la supervisión y las competencias de los alumnos, así como las dificultades en la redacción académica, lo que motiva el estudio. Esto está bien articulado en el texto."
+      },
+      {
+        "item_id": "2.4",
+        "descripcion": "Se delimitan las variables principales del problema (qué se va a medir o comparar) de manera explícita.",
+        "pts_max": 1.0,
+        "pts_obtenido": 0.5,
+        "razon": "Se mencionan variables como la calidad metodológica y los retrasos en la culminación de proyectos, pero no se delimitan de manera explícita ni se especifica cómo se medirán o compararán."
+      },
+      {
+        "item_id": "2.5",
+        "descripcion": "Se delimita el alcance temporal y espacial del estudio (periodo y lugar de ejecución).",
+        "pts_max": 1.0,
+        "pts_obtenido": 0.0,
+        "razon": "No se menciona un alcance temporal ni espacial específico para el estudio, lo que limita la claridad sobre dónde y cuándo se llevará a cabo la investigación."
+      },
+      {
+        "item_id": "2.6",
+        "descripcion": "La descripción del problema es coherente con el tipo y diseño de investigación declarado más adelante.",
+        "pts_max": 1.0,
+        "pts_obtenido": 0.5,
+        "razon": "Aunque el problema se relaciona con el diseño de investigación, la falta de claridad en el alcance y las variables dificulta una conexión completa con el tipo de investigación que se propone."
+      },
+      {
+        "item_id": "2.7",
+        "descripcion": "Se mencionan las consecuencias o impacto negativo de no resolver el problema (argumento de urgencia o relevancia).",
+        "pts_max": 1.0,
+        "pts_obtenido": 0.5,
+        "razon": "Se mencionan las dificultades que enfrentan los estudiantes, pero no se articulan claramente las consecuencias de no abordar el problema, lo que podría fortalecer el argumento de urgencia."
+      },
+      {
+        "item_id": "2.8",
+        "descripcion": "La redacción es clara, libre de ambigüedad y no mezcla el problema con la solución propuesta.",
+        "pts_max": 1.0,
+        "pts_obtenido": 1.0,
+        "razon": "La redacción es clara y se enfoca en describir el problema sin mezclarlo con posibles soluciones, lo que facilita la comprensión del lector."
+      },
+      {
+        "item_id": "2.9",
+        "descripcion": "El problema puede ser investigado empíricamente, es decir, sus variables son observables o medibles.",
+        "pts_max": 1.0,
+        "pts_obtenido": 0.5,
+        "razon": "Aunque se mencionan variables que pueden ser observadas, la falta de delimitación clara de estas variables limita la capacidad de investigación empírica."
+      },
+      {
+        "item_id": "3.1",
+        "descripcion": "El problema está formulado como una pregunta clara, directa y sin ambigüedad (¿en qué medida?, ¿qué efecto?, ¿cómo se relaciona?).",
+        "pts_max": 1.5,
+        "pts_obtenido": 1.5,
+        "razon": "La pregunta formulada es clara y directa, abordando el efecto del uso de sistemas multi-agente en la calidad metodológica y en la reducción de retrasos, lo que cumple con el criterio."
+      },
+      {
+        "item_id": "3.2",
+        "descripcion": "La pregunta involucra al menos dos variables o conceptos y su posible relación, diferencia o efecto.",
+        "pts_max": 1.0,
+        "pts_obtenido": 1.0,
+        "razon": "La pregunta incluye las variables de calidad metodológica y retrasos en la culminación de proyectos, así como su relación con el uso de sistemas multi-agente, cumpliendo con este criterio."
+      },
+      {
+        "item_id": "3.3",
+        "descripcion": "La pregunta es respondible mediante el diseño de investigación propuesto (no requiere datos imposibles de obtener).",
+        "pts_max": 1.0,
+        "pts_obtenido": 1.0,
+        "razon": "La pregunta es factible de responder con el diseño de investigación propuesto, ya que se puede obtener información sobre la calidad metodológica y los retrasos."
+      },
+      {
+        "item_id": "3.4",
+        "descripcion": "La pregunta no es demasiado amplia ni demasiado estrecha; delimita un problema tratable en el tiempo del estudio.",
+        "pts_max": 0.75,
+        "pts_obtenido": 0.75,
+        "razon": "La pregunta está bien delimitada y se enfoca en un aspecto específico que puede ser tratado dentro del tiempo del estudio."
+      },
+      {
+        "item_id": "3.5",
+        "descripcion": "La pregunta es coherente con los objetivos (la respuesta a la pregunta equivale a lograr el objetivo general).",
+        "pts_max": 0.75,
+        "pts_obtenido": 0.75,
+        "razon": "La pregunta formulada es coherente con los objetivos del estudio, ya que la respuesta contribuirá a alcanzar el objetivo general."
+      }
+    ],
+    "gain_score": 0.3214,
+    "gain_score_interpretacion": "mejora moderada",
+    "gain_score_pre": 8.0,
+    "gain_score_post": 10.25,
+    "similitud_coseno": 0.9922,
+    "similitud_coseno_interpretacion": "alta similitud semántica (sin desviaciones)",
+    "context_precision": 1.0,
+    "context_precision_chunks_totales": 2,
+    "context_precision_chunks_relevantes": 2,
+    "context_precision_interpretacion": "alta relevancia RAG",
+    "iterative_consistency": [],
+    "iterative_consistency_has_iter": false
+  }
+}
